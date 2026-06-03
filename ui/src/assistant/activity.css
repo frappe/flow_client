@@ -1,0 +1,27 @@
+/* A moving highlight sweeps a label while its activity is live (Claude-style).
+   Shared by the activity group summary and individual activity steps. */
+.shimmer {
+	background: linear-gradient(
+		90deg,
+		var(--ink-gray-4) 0%,
+		var(--ink-gray-4) 35%,
+		var(--ink-gray-8) 50%,
+		var(--ink-gray-4) 65%,
+		var(--ink-gray-4) 100%
+	);
+	background-size: 200% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+	animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer {
+	to {
+		background-position: -200% 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.shimmer {
+		animation: none;
+	}
+}

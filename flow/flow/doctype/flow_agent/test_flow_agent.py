@@ -9,6 +9,7 @@ from frappe.tests import IntegrationTestCase
 
 from flow.lib.agent import Agent
 from flow.lib.model import ChatResponse, Model
+from flow.permissions import FLOW_USER_ROLE, ensure_flow_role
 from flow.tools.builtins import sync_builtin_tools
 
 
@@ -241,14 +242,20 @@ class TestFlowAgentModelPermission(IntegrationTestCase):
 		self.allowed = frappe.get_doc(_model(title="Allowed Model")).insert()
 		self.restricted = frappe.get_doc(_model(title="Restricted Model")).insert()
 		self.agent_doc = frappe.get_doc(_agent(self.restricted.name)).insert()
-		self.user = frappe.get_doc(
-			{
-				"doctype": "User",
-				"email": "model-perm@example.com",
-				"first_name": "Model Perm",
-				"send_welcome_email": 0,
-			}
-		).insert(ignore_permissions=True)
+		ensure_flow_role()
+		if not frappe.db.exists("User", "model-perm@example.com"):
+			frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": "model-perm@example.com",
+					"first_name": "Model Perm",
+					"send_welcome_email": 0,
+				}
+			).insert(ignore_permissions=True)
+		self.user = frappe.get_doc("User", "model-perm@example.com")
+		# These tests are about User Permission narrowing *which* model is usable, so the
+		# user must first clear the doctype-level read check — that now needs Flow User.
+		self.user.add_roles(FLOW_USER_ROLE)
 
 	def tearDown(self):
 		frappe.set_user("Administrator")

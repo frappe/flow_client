@@ -195,7 +195,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-05-23 00:00:00",
+ "modified": "2026-08-06 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Flow",
  "name": "Flow Run",
@@ -215,7 +215,7 @@
   {
    "if_owner": 1,
    "read": 1,
-   "role": "All"
+   "role": "Flow User"
   }
  ],
  "row_format": "Dynamic",

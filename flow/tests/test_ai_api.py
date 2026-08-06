@@ -13,6 +13,7 @@ from flow.api import attach_file, recover_session, resume_run, start_run, submit
 from flow.api.api import _parse_attachments
 from flow.lib.model import ChatResponse, Model, ToolCall
 from flow.memory import store as memory_store
+from flow.permissions import FLOW_USER_ROLE, ensure_flow_role
 from flow.tools.builtins import sync_builtin_tools
 
 
@@ -604,18 +605,23 @@ class TestAttachFile(IntegrationTestCase):
 
 
 def _ensure_user(email: str) -> str:
-	if frappe.db.exists("User", email):
-		return email
-	user = frappe.get_doc(
-		{
-			"doctype": "User",
-			"email": email,
-			"first_name": email.split("@")[0],
-			"send_welcome_email": 0,
-			"enabled": 1,
-		}
-	)
-	user.insert(ignore_permissions=True)
+	"""A user who may use Flow. The role is granted deliberately: these tests cover
+	session/run *ownership*, which must hold between two legitimate Flow users. Without
+	the role they would be rejected by the access gate instead, and pass for the wrong
+	reason. The gate itself is covered in flow/tests/test_permissions.py."""
+	ensure_flow_role()
+	if not frappe.db.exists("User", email):
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": email.split("@")[0],
+				"send_welcome_email": 0,
+				"enabled": 1,
+			}
+		).insert(ignore_permissions=True)
+	# Re-applied every call: the role row may have been rolled back by an earlier test.
+	frappe.get_doc("User", email).add_roles(FLOW_USER_ROLE)
 	return email
 
 

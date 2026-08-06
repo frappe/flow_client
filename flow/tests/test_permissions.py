@@ -1,13 +1,20 @@
 # Copyright (c) 2026, Frappe Technologies and contributors
 # License: MIT. See LICENSE
 
-from typing import Any
 from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from flow.api import get_agent_tools, recover_session, resume_run, start_run, stop_run, submit_feedback
+from flow.api import (
+	attach_file,
+	get_agent_tools,
+	recover_session,
+	resume_run,
+	start_run,
+	stop_run,
+	submit_feedback,
+)
 from flow.boot import boot_session
 from flow.lib.model import ChatResponse, Model
 from flow.permissions import FLOW_USER_ROLE, ensure_flow_role, has_flow_access
@@ -110,17 +117,29 @@ class TestFlowRoleGate(IntegrationTestCase):
 		self.assertEqual(payload["status"], "Completed")
 
 	def test_every_whitelisted_endpoint_is_gated(self):
-		"""No endpoint may be reachable without the role — a new one must not slip through."""
+		"""No endpoint may be reachable without the role.
+
+		The call map is asserted against `flow.api.__all__` before anything runs, so a
+		newly exported endpoint fails here until it is covered. Listing the calls by hand
+		alone would silently miss one."""
+		import flow.api
+
 		frappe.set_user(_user("flow-sweep@example.com", ["Desk User"]))
-		calls: list[tuple[str, Any]] = [
-			("start_run", lambda: start_run("hi")),
-			("resume_run", lambda: resume_run("any-run", {})),
-			("stop_run", lambda: stop_run("any-run")),
-			("recover_session", lambda: recover_session("any-session")),
-			("submit_feedback", lambda: submit_feedback("any-run", "Up")),
-			("get_agent_tools", lambda: get_agent_tools(self.agent.name)),
-		]
-		for name, call in calls:
+		calls = {
+			"start_run": lambda: start_run("hi"),
+			"resume_run": lambda: resume_run("any-run", {}),
+			"stop_run": lambda: stop_run("any-run"),
+			"recover_session": lambda: recover_session("any-session"),
+			"submit_feedback": lambda: submit_feedback("any-run", "Up"),
+			"get_agent_tools": lambda: get_agent_tools(self.agent.name),
+			"attach_file": lambda: attach_file("any-file"),
+		}
+		self.assertEqual(
+			sorted(calls),
+			sorted(flow.api.__all__),
+			"every endpoint exported by flow.api must be swept here",
+		)
+		for name, call in calls.items():
 			with self.subTest(endpoint=name):
 				with self.assertRaises(frappe.PermissionError):
 					call()

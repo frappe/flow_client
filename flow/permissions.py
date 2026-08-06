@@ -40,7 +40,11 @@ def has_flow_access(user: str | None = None) -> bool:
 
 
 def ensure_flow_role() -> None:
-	"""Create the Flow User role if missing. Idempotent — safe on install and every migrate."""
+	"""Create the Flow User role if missing. Idempotent — safe on install and every migrate.
+
+	The existence check is an optimisation, not the guarantee: two lifecycle hooks racing
+	could both pass it. `ignore_if_duplicate` makes the insert itself the safe operation.
+	"""
 	if frappe.db.exists("Role", FLOW_USER_ROLE):
 		return
 	frappe.get_doc(
@@ -50,4 +54,4 @@ def ensure_flow_role() -> None:
 			# Flow lives in the desk, so the role must carry desk access to be useful.
 			"desk_access": 1,
 		}
-	).insert(ignore_permissions=True)
+	).insert(ignore_permissions=True, ignore_if_duplicate=True)

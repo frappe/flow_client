@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -18,6 +19,8 @@ IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp", "tiff", "tif", "gif"}
 FILE_EXTENSIONS = {"pdf", "xlsx", "docx", "html", "htm"} | TEXT_EXTENSIONS | IMAGE_EXTENSIONS
 
 OCR_DPI = 200
+
+PDFIUM_LOCK = threading.Lock()
 
 CHILD_FIELDTYPES = {"Table", "Table MultiSelect"}
 HTML_FIELDTYPES = {"Text Editor"}
@@ -145,7 +148,7 @@ def _extract_pdf(data: bytes) -> str:
 	from pdfminer.pdfdocument import PDFPasswordIncorrect
 
 	try:
-		with pdfplumber.open(BytesIO(data)) as pdf:
+		with PDFIUM_LOCK, pdfplumber.open(BytesIO(data)) as pdf:
 			pages = [_extract_pdf_page(page) for page in pdf.pages]
 	except PDFPasswordIncorrect:
 		frappe.throw(_("PDF is password protected and cannot be read."), title=_("Cannot Read PDF"))

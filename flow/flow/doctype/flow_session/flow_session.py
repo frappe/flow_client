@@ -103,7 +103,8 @@ class FlowSession(Document):
 
 	def transcript(self) -> list[dict[str, Any]]:
 		"""Return the conversation history in OpenAI message format."""
-		return [_row_to_message(row) for row in self.messages]
+		tool_call_id_to_name: dict[str, str] = {}
+		return [_row_to_message(row, tool_call_id_to_name) for row in self.messages]
 
 	def append_run_messages(self, new_messages: list[dict[str, Any]], run: str) -> None:
 		"""Append the messages produced by `run` to this session's transcript.
@@ -444,13 +445,24 @@ def _route_attachment(text: str | None, threshold: int, embeddings_on: bool) -> 
 	return "Retrieval" if embeddings_on else "Inline"
 
 
-def _row_to_message(row) -> dict[str, Any]:
+def _row_to_message(row, tool_call_id_to_name: dict[str, str] | None = None) -> dict[str, Any]:
 	"""Convert a stored transcript row to an OpenAI-format message dict."""
 	if row.role == "tool":
-		return {"role": "tool", "tool_call_id": row.tool_call_id, "content": row.content or ""}
+		msg: dict[str, Any] = {"role": "tool", "tool_call_id": row.tool_call_id, "content": row.content or ""}
+		if tool_call_id_to_name and row.tool_call_id in tool_call_id_to_name:
+			msg["name"] = tool_call_id_to_name[row.tool_call_id]
+		return msg
 	message: dict[str, Any] = {"role": row.role, "content": row.content}
 	if row.tool_calls:
-		message["tool_calls"] = json.loads(row.tool_calls)
+		try:
+			parsed_calls = json.loads(row.tool_calls)
+			message["tool_calls"] = parsed_calls
+			if tool_call_id_to_name is not None:
+				for tc in parsed_calls or []:
+					if isinstance(tc, dict) and tc.get("id") and tc.get("function", {}).get("name"):
+						tool_call_id_to_name[tc["id"]] = tc["function"]["name"]
+		except (ValueError, TypeError):
+			pass
 	return message
 
 

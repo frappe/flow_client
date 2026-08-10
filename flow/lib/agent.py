@@ -205,7 +205,7 @@ class Agent:
 				content = self._resolve_confirmation(call, answer)
 			else:
 				content = _serialize_tool_result(answer)
-			messages.append({"role": "tool", "tool_call_id": call.id, "content": content})
+			messages.append({"role": "tool", "tool_call_id": call.id, "name": call.name, "content": content})
 			resolved.append((call, content))
 		return messages, resolved
 
@@ -260,6 +260,7 @@ class Agent:
 					{
 						"role": "tool",
 						"tool_call_id": call.id,
+						"name": call.name,
 						"content": _serialize_tool_result(result),
 					}
 				)

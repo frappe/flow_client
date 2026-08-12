@@ -57,6 +57,14 @@ scheduler_events = {
 	},
 }
 
-after_migrate = ["flow.assistant.sync_builtin_assistant"]
+# The Flow User role gates access to the assistant; create it before anything that
+# might reference it. Both hooks call the same idempotent function so a fresh install
+# and an existing site converge on the same state.
+after_install = "flow.permissions.ensure_flow_role"
+
+after_migrate = [
+	"flow.permissions.ensure_flow_role",
+	"flow.assistant.sync_builtin_assistant",
+]
 
 extend_bootinfo = "flow.boot.boot_session"

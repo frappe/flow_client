@@ -12,6 +12,8 @@ import frappe
 from frappe import _
 from werkzeug.wrappers import Response
 
+from flow.permissions import assert_flow_access
+
 if TYPE_CHECKING:
 	from flow.flow.doctype.flow_run.flow_run import FlowRun
 	from flow.lib.agent import Event
@@ -28,6 +30,7 @@ def start_run(
 ) -> dict[str, Any] | Response:
 	"""Start a new turn. Creates a session if none is given. `attachments` are uploaded File
 	names whose text is injected into this turn. With `stream=True`, returns SSE."""
+	assert_flow_access()
 	if not isinstance(input, str) or not input.strip():
 		frappe.throw(_("Input is required."), title=_("Invalid Input"))
 
@@ -45,6 +48,8 @@ def resume_run(
 	run_name: str, answers: dict[str, Any] | str, stream: bool | str = False
 ) -> dict[str, Any] | Response:
 	"""Resume a Paused run. `answers` maps each question.key to the user's answer. With `stream=True`, returns SSE."""
+	assert_flow_access()
+
 	from flow.lib.session import assert_run_owner, load_session
 
 	parsed_answers = _parse_answers(answers)
@@ -66,6 +71,8 @@ def resume_run(
 def stop_run(run_name: str) -> dict[str, str]:
 	"""Stop a run at the user's request: terminate a Paused run so the agent won't continue,
 	or finalize a Running one whose SSE stream the client has aborted."""
+	assert_flow_access()
+
 	from flow.lib.session import assert_run_owner
 
 	if not isinstance(run_name, str) or not run_name.strip():
@@ -83,6 +90,7 @@ def recover_session(session: str) -> dict[str, int]:
 	"""Fail any Running run on session (re)load. The client that owned the stream is
 	gone, so the run is abandoned; clearing it here unblocks the next turn instead of
 	waiting for the stale-run timeout on the next send."""
+	assert_flow_access()
 	if not isinstance(session, str) or not session.strip():
 		frappe.throw(_("Session is required."), title=_("Invalid Session"))
 
@@ -109,6 +117,8 @@ def submit_feedback(run_name: str, rating: str, comment: str | None = None) -> d
 	"""Record thumbs feedback on a finished run, or clear it with rating "None". A
 	thumbs-down comment is stored as shared agent memory when the agent has memory
 	enabled (a no-op otherwise). Clearing the rating leaves any saved memory intact."""
+	assert_flow_access()
+
 	from flow.lib.session import assert_run_owner
 	from flow.memory.memory import save_feedback_memory
 
@@ -148,6 +158,7 @@ def submit_feedback(run_name: str, rating: str, comment: str | None = None) -> d
 def get_agent_tools(agent: str) -> dict[str, bool]:
 	"""Map an agent's tool slugs to whether each needs confirmation, so the panel can
 	classify tool calls (approval vs. inline)"""
+	assert_flow_access()
 	if not isinstance(agent, str) or not agent.strip():
 		return {}
 
@@ -168,6 +179,7 @@ def attach_file(file: str) -> dict[str, Any]:
 	"""Validate and extract an uploaded File for use as a chat attachment. Errors
 	(unsupported type, unreadable, not owned) surface here, at upload time. The
 	extracted text is staged in cache; the attachment row is written on send."""
+	assert_flow_access()
 	if not isinstance(file, str) or not file.strip():
 		frappe.throw(_("File is required."), title=_("Invalid Attachment"))
 

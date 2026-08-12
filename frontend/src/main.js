@@ -161,5 +161,8 @@ class FlowPanel {
 
 frappe.provide("frappe.flow");
 $(document).on("app_ready", () => {
+	// Users without the Flow User role get no panel and no Ctrl+I shortcut. This is
+	// presentation only — the server rejects their API calls regardless (flow/permissions.py).
+	if (frappe.boot?.flow_enabled === false) return;
 	frappe.flow.panel = new FlowPanel();
 });

@@ -218,7 +218,11 @@ async function switchSession(name) {
 		} else if (m.role === "assistant") {
 			if (!current) current = pushAssistant(false);
 			if (m.run) current.runName = m.run;
-			if (m.content) current.parts.push(makeTextPart(m.content));
+			if (m.content) {
+				for (const p of makeTextOrErrorParts(m.content)) {
+					current.parts.push(p);
+				}
+			}
 			for (const t of parseToolCalls(m.tool_calls)) {
 				current.parts.push(makeToolPart(t.id, t.function.name, t.function.arguments));
 			}
@@ -413,8 +417,9 @@ function handleEvent(event, msg) {
 			refreshHistory();
 			break;
 		case "error":
-			appendText(msg, `\n\n${__("Error")}: ${event.message}`);
+			msg.parts.push(makeErrorPart(event.message || __("An error occurred")));
 			msg.pending = false;
+			requestScroll();
 			break;
 	}
 }
@@ -423,6 +428,29 @@ function handleEvent(event, msg) {
 // Single source of the part shapes, shared by the live stream and the session
 // reload so the two paths can't drift apart.
 const makeTextPart = (text) => ({ id: nextId(), type: "text", text });
+const makeErrorPart = (message) => ({ id: nextId(), type: "error", message });
+
+function makeTextOrErrorParts(content) {
+	if (!content) return [];
+	const errorMarker = "\n\nError: ";
+	if (content.startsWith("Error: ") || content.includes(errorMarker)) {
+		const parts = [];
+		let textBefore = "";
+		let errorText = "";
+		if (content.startsWith("Error: ")) {
+			errorText = content.slice("Error: ".length).trim();
+		} else {
+			const idx = content.indexOf(errorMarker);
+			textBefore = content.slice(0, idx).trim();
+			errorText = content.slice(idx + errorMarker.length).trim();
+		}
+		if (textBefore) parts.push(makeTextPart(textBefore));
+		if (errorText) parts.push(makeErrorPart(errorText));
+		return parts;
+	}
+	return [makeTextPart(content)];
+}
+
 const makeToolPart = (id, name, args) => ({
 	id,
 	type: "tool",
@@ -482,8 +510,10 @@ function appendText(msg, delta) {
 }
 
 function failMessage(msg, error) {
-	appendText(msg, `\n\n${__("Error")}: ${error.message}`);
+	const errMsg = error?.message || String(error);
+	msg.parts.push(makeErrorPart(errMsg));
 	msg.pending = false;
+	requestScroll();
 }
 
 function parseToolCalls(raw) {

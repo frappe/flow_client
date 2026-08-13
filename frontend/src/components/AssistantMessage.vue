@@ -5,6 +5,7 @@ import ActivityGroup from "./ActivityGroup.vue";
 import ConfirmCard from "./ConfirmCard.vue";
 import FeedbackBar from "./FeedbackBar.vue";
 import WorkingIndicator from "./WorkingIndicator.vue";
+import ErrorMessage from "./ErrorMessage.vue";
 import { useStore } from "@/store";
 
 const props = defineProps({ message: { type: Object, required: true } });
@@ -18,11 +19,15 @@ function isApproval(part) {
 	return toolApproval.value[part.name] === true || q !== undefined || part.approval !== null;
 }
 
-// Group parts for render: text → prose, approval tool → own line (card if pending),
+// Group parts for render: text → prose, error → red error box, approval tool → own line (card if pending),
 // other tools → merged activity group. Rendering-only.
 const items = computed(() => {
 	const out = [];
 	for (const part of props.message.parts) {
+		if (part.type === "error") {
+			out.push({ kind: "error", id: part.id, part });
+			continue;
+		}
 		if (part.type !== "tool") {
 			out.push({ kind: "text", id: part.id, part });
 			continue;
@@ -61,7 +66,8 @@ const hovered = ref(false);
 		@mouseleave="hovered = false"
 	>
 		<template v-for="(item, i) in items" :key="item.id">
-			<MarkdownText v-if="item.kind === 'text'" :part="item.part" />
+			<ErrorMessage v-if="item.kind === 'error'" :message="item.part.message" />
+			<MarkdownText v-else-if="item.kind === 'text'" :part="item.part" />
 			<ConfirmCard
 				v-else-if="item.kind === 'confirm'"
 				:question="item.question"

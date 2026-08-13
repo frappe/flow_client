@@ -31,7 +31,7 @@
   {
    "description": "When role is 'tool', the assistant tool_call.id this result answers.",
    "fieldname": "tool_call_id",
-   "fieldtype": "Data",
+   "fieldtype": "Small Text",
    "label": "Tool Call ID"
   },
   {

@@ -19,7 +19,7 @@ class FlowSessionMessage(Document):
 		parenttype: DF.Data
 		role: DF.Data
 		run: DF.Link | None
-		tool_call_id: DF.Data | None
+		tool_call_id: DF.SmallText | None
 		tool_calls: DF.JSON | None
 	# end: auto-generated types
 

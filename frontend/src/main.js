@@ -20,7 +20,9 @@ class FlowPanel {
 
 		this._mount();
 		this._syncTheme();
+		this._syncVisualViewport();
 		this._registerShortcut();
+		this._addMobileTrigger();
 
 		watch(this.store.sessionName, () => this._persist());
 	}
@@ -114,6 +116,18 @@ class FlowPanel {
 		});
 	}
 
+	_syncVisualViewport() {
+		const viewport = window.visualViewport;
+		const sync = () => {
+			this.root.style.top = `${viewport?.offsetTop || 0}px`;
+			this.root.style.height = `${viewport?.height || window.innerHeight}px`;
+		};
+		viewport?.addEventListener("resize", sync);
+		viewport?.addEventListener("scroll", sync);
+		window.addEventListener("orientationchange", sync);
+		sync();
+	}
+
 	_registerShortcut() {
 		frappe.ui.keys.add_shortcut({
 			shortcut: "ctrl+i",
@@ -123,9 +137,45 @@ class FlowPanel {
 		});
 	}
 
+	_addMobileTrigger() {
+		this.mobileTrigger = document.createElement("button");
+		this.mobileTrigger.type = "button";
+		this.mobileTrigger.setAttribute("aria-label", __("Open Flow assistant"));
+		this.mobileTrigger.title = __("Open Flow assistant");
+		this.mobileTrigger.textContent = "Flow";
+		Object.assign(this.mobileTrigger.style, {
+			position: "fixed",
+			right: "16px",
+			bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+			width: "52px",
+			height: "52px",
+			zIndex: "1039",
+			border: "0",
+			borderRadius: "50%",
+			background: "var(--primary, #171717)",
+			color: "var(--fg-color, #fff)",
+			boxShadow: "0 6px 20px rgba(0, 0, 0, 0.22)",
+			fontSize: "13px",
+			fontWeight: "600",
+			cursor: "pointer",
+		});
+		this.mobileTrigger.addEventListener("click", () => this.show());
+		document.body.appendChild(this.mobileTrigger);
+
+		const sync = () => {
+			const mobile =
+				window.matchMedia("(any-pointer: coarse)").matches || window.innerWidth <= 768;
+			this.mobileTrigger.style.display = mobile && !this.visible ? "block" : "none";
+		};
+		this._syncMobileTrigger = sync;
+		window.addEventListener("resize", sync);
+		sync();
+	}
+
 	show() {
 		this.visible = true;
 		this.root.style.transform = "translateX(0)";
+		this._syncMobileTrigger?.();
 		this.store.restoreSession();
 		this._persist();
 	}
@@ -133,6 +183,7 @@ class FlowPanel {
 	hide() {
 		this.visible = false;
 		this.root.style.transform = "translateX(100%)";
+		this._syncMobileTrigger?.();
 		this._persist();
 	}
 

@@ -174,12 +174,17 @@ class TestDispatch(IntegrationTestCase):
 		self.trigger.condition = f"frappe.session.user == '{service.name}'"
 		self.trigger.save()
 		doc = frappe.get_doc({"doctype": "ToDo", "description": "run-as cond"}).insert()
+		frappe.local.session.sid = "browser-session-probe"
+		original_form_dict = frappe._dict({"cmd": "frappe.desk.form.save.submit"})
+		frappe.local.form_dict = original_form_dict
 
 		with patch("frappe.enqueue") as enqueue:
 			dispatch(doc, "after_insert")
 
 		enqueue.assert_called_once()
 		self.assertEqual(frappe.session.user, "Administrator")  # restored afterward
+		self.assertEqual(frappe.session.sid, "browser-session-probe")
+		self.assertIs(frappe.local.form_dict, original_form_dict)
 
 	def test_condition_runtime_error_skips_trigger(self):
 		self.trigger.condition = "doc.status.no_such_method()"

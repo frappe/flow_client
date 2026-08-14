@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -71,9 +73,7 @@ def fire(
 		return None
 
 	# A trigger runs as its configured `run_as` user (falling back to the owner)
-	original_user = frappe.session.user
-	frappe.set_user(t.run_as or t.owner)
-	try:
+	with _as_user(t.run_as or t.owner):
 		doc = None
 		if target_doctype and target_name:
 			try:
@@ -94,8 +94,6 @@ def fire(
 			auto_approve=bool(t.auto_approve),
 		)
 		return run.name
-	finally:
-		frappe.set_user(original_user)
 
 
 def _doctype_triggers(target_doctype: str, doc_event: str) -> list:
@@ -115,12 +113,37 @@ def _passes_condition(trigger, doc: Document) -> bool:
 	"""Evaluate the pre-enqueue condition as the trigger's run identity (matching fire),
 	so a permission-sensitive condition doesn't silently under-fire for the low-privilege
 	user whose action triggered it."""
-	original_user = frappe.session.user
-	frappe.set_user(trigger.run_as or trigger.owner)
-	try:
+	with _as_user(trigger.run_as or trigger.owner):
 		return _eval_condition(trigger.condition, doc)
+
+
+@contextmanager
+def _as_user(user: str) -> Iterator[None]:
+	"""Temporarily impersonate a trigger user without corrupting an HTTP session.
+
+	``frappe.set_user`` resets the SID, request form data, and permission caches. Restoring
+	only the username therefore logs out the browser request that dispatched a trigger.
+	Snapshot and restore every value mutated by ``set_user`` instead.
+	"""
+	session = frappe.local.session
+	session_state = (session.user, session.sid, session.data)
+	local_attrs = (
+		"cache",
+		"form_dict",
+		"jenv_restricted",
+		"jenv_unrestricted",
+		"role_permissions",
+		"new_doc_templates",
+		"user_perms",
+	)
+	local_state = {attr: getattr(frappe.local, attr, None) for attr in local_attrs}
+	try:
+		frappe.set_user(user)
+		yield
 	finally:
-		frappe.set_user(original_user)
+		session.user, session.sid, session.data = session_state
+		for attr, value in local_state.items():
+			setattr(frappe.local, attr, value)
 
 
 def _eval_condition(condition: str, doc: Document) -> bool:

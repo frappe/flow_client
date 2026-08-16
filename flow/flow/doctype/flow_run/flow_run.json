@@ -22,6 +22,7 @@
   "questions",
   "usage",
   "config_snapshot",
+  "page_context",
   "section_break_error",
   "error",
   "section_break_feedback",
@@ -158,6 +159,14 @@
    "read_only": 1
   },
   {
+   "description": "Permission-checked Desk page snapshot attached to this run.",
+   "fieldname": "page_context",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Page Context",
+   "read_only": 1
+  },
+  {
    "collapsible": 1,
    "depends_on": "eval:doc.status === 'Failed'",
    "fieldname": "section_break_error",
@@ -195,7 +204,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-05-23 00:00:00",
+ "modified": "2026-08-16 00:00:00",
  "modified_by": "Administrator",
  "module": "Flow",
  "name": "Flow Run",

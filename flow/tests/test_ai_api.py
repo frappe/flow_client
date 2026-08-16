@@ -90,7 +90,7 @@ def _confirm_call(call_id: str = "c1") -> ChatResponse:
 
 
 def _memory_call(content: str = "Widget A maps to WGT-001.", call_id: str = "m1") -> ChatResponse:
-	"""A response that calls update_memory (runs inline, no confirmation)."""
+	"""A response that requests a durable memory write."""
 	return ChatResponse(
 		content=None,
 		tool_calls=[
@@ -466,6 +466,82 @@ class TestStartRunSecurity(IntegrationTestCase):
 			start_run("steal context", session=theirs["session"])
 
 
+class TestStartRunPageContext(IntegrationTestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		sync_builtin_tools()
+
+	def setUp(self):
+		self.model = frappe.get_doc(_model_doc(title="Page Context Model")).insert()
+		self.agent = frappe.get_doc(_agent_doc(self.model.name, title="Page Context Agent")).insert()
+
+	def tearDown(self):
+		frappe.db.rollback()
+
+	@staticmethod
+	def _context():
+		return {
+			"type": "route",
+			"route": ["query-report", "Sales Analytics"],
+			"page_text": "Visible report contents",
+		}
+
+	def test_page_context_is_injected_and_persisted_on_run(self):
+		captured: list[list[dict[str, Any]]] = []
+
+		def capture_chat(messages: list[dict[str, Any]], **_: Any) -> ChatResponse:
+			captured.append([dict(message) for message in messages])
+			return _final()
+
+		with patch.object(Model, "chat", side_effect=capture_chat):
+			payload = start_run("summarize", agent=self.agent.name, page_context=self._context())
+
+		user_content = [message for message in captured[0] if message["role"] == "user"][-1]["content"]
+		self.assertIn("Visible report contents", user_content)
+		run = frappe.get_doc("Flow Run", payload["name"])
+		self.assertEqual(json.loads(run.page_context)["contents"], "Visible report contents")
+
+	def test_page_context_accepts_json_string(self):
+		with patch.object(Model, "chat", return_value=_final()):
+			payload = start_run(
+				"summarize",
+				agent=self.agent.name,
+				page_context=json.dumps(self._context()),
+			)
+
+		self.assertTrue(frappe.get_doc("Flow Run", payload["name"]).page_context)
+
+	def test_page_context_is_not_reused_by_next_turn(self):
+		captured: list[list[dict[str, Any]]] = []
+
+		def capture_chat(messages: list[dict[str, Any]], **_: Any) -> ChatResponse:
+			captured.append([dict(message) for message in messages])
+			return _final()
+
+		with patch.object(Model, "chat", side_effect=capture_chat):
+			first = start_run("first", agent=self.agent.name, page_context=self._context())
+			start_run("second", session=first["session"])
+
+		self.assertTrue(any("Visible report contents" in (m.get("content") or "") for m in captured[0]))
+		self.assertFalse(any("Visible report contents" in (m.get("content") or "") for m in captured[1]))
+
+	def test_page_context_survives_pause_and_resume(self):
+		with patch.object(Model, "chat", return_value=_confirm_call()):
+			paused = start_run("do it", agent=self.agent.name, page_context=self._context())
+
+		captured: list[list[dict[str, Any]]] = []
+
+		def capture_chat(messages: list[dict[str, Any]], **_: Any) -> ChatResponse:
+			captured.append([dict(message) for message in messages])
+			return _final("ok")
+
+		with patch.object(Model, "chat", side_effect=capture_chat):
+			resume_run(paused["name"], {"c1": "use a different approach"})
+
+		self.assertTrue(any("Visible report contents" in (m.get("content") or "") for m in captured[0]))
+
+
 class TestStartRunAttachments(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
@@ -828,8 +904,14 @@ class TestMemoryRunProvenance(IntegrationTestCase):
 		memory_store.drop_table()
 
 	def test_agent_memory_stamped_with_run_then_flag_cleared(self):
-		with patch.object(Model, "chat", side_effect=[_memory_call(), _final("done")]):
-			payload = start_run("remember the mapping", agent=self.agent.name)
+		with patch.object(Model, "chat", return_value=_memory_call()):
+			paused = start_run("remember the mapping", agent=self.agent.name)
+
+		self.assertEqual(paused["status"], "Paused")
+		self.assertFalse(frappe.db.exists("Flow Agent Memory", {"agent": self.agent.name}))
+
+		with patch.object(Model, "chat", return_value=_final("done")):
+			payload = resume_run(paused["name"], {"m1": "Approve"})
 
 		self.assertEqual(payload["status"], "Completed")
 		memory = frappe.get_doc("Flow Agent Memory", {"agent": self.agent.name})

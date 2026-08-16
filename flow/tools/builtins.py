@@ -147,7 +147,7 @@ search_knowledge = bind_search_knowledge([])
 _UPDATE_MEMORY_DESCRIPTION = """Save a durable fact to persistent memory, or edit one by passing its memory_id.
 
 Saved memories appear in the <agent_memory> block of your system prompt on every turn, \
-including future conversations.
+including future conversations. Every memory write requires explicit user confirmation.
 
 When to save: stable, reusable facts learned during the conversation — mappings and \
 identifiers (e.g. an invoice item name to its ERP item code), business rules, corrections \
@@ -188,7 +188,15 @@ def bind_update_memory(agent: str | None) -> Tool:
 			frappe.throw(_("Memory is not configured for this agent."), title=_("Memory Unavailable"))
 		return save_memory(agent, content=content, scope=scope, memory_id=memory_id, keywords=keywords)
 
-	return tool(update_memory, description=_UPDATE_MEMORY_DESCRIPTION)
+	return tool(
+		update_memory,
+		description=_UPDATE_MEMORY_DESCRIPTION,
+		requires_confirmation=True,
+		confirm_prompt=lambda args: _("Save this {0} memory?\n\n{1}").format(
+			args.get("scope") or "agent",
+			args.get("content") or "",
+		),
+	)
 
 
 update_memory = bind_update_memory(None)

@@ -7,6 +7,7 @@ import { useStore } from "./store";
 
 const props = defineProps({
 	onClose: { type: Function, default: null },
+	onMinimize: { type: Function, default: null },
 	onToggleFullscreen: { type: Function, default: null },
 });
 const { loadInitial, scrollTick } = useStore();
@@ -35,6 +36,7 @@ onUnmounted(() => observer?.disconnect());
 		class="flow-panel relative flex h-full flex-col border-l border-outline-gray-2 bg-surface-white text-ink-gray-9"
 	>
 		<PanelHeader
+			:on-minimize="props.onMinimize"
 			:on-toggle-fullscreen="props.onToggleFullscreen"
 			@close="props.onClose && props.onClose()"
 		/>

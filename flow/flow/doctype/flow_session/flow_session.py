@@ -10,6 +10,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from flow.lib.page_context import format_page_context, parse_page_context, revalidate_page_context
+
 if TYPE_CHECKING:
 	from collections.abc import Generator
 
@@ -131,6 +133,7 @@ class FlowSession(Document):
 		input: str,
 		*,
 		attachments: list[str] | None = None,
+		page_context: dict[str, Any] | None = None,
 		source: str = "Manual",
 		trigger: str | None = None,
 		reference_doctype: str | None = None,
@@ -138,8 +141,8 @@ class FlowSession(Document):
 		auto_approve: bool = False,
 		stream: bool = False,
 	) -> FlowRun | Generator[Event]:
-		"""Run one turn and persist it as a Flow Run. `attachments` are File names whose text
-		is injected into this turn's prompt. With `stream=True`, returns an event generator.
+		"""Run one turn and persist it as a Flow Run. Attachments and the optional page snapshot
+		are injected ephemerally into this turn's prompt. With `stream=True`, returns an event generator.
 
 		Commits the current transaction before the model call (to release row locks). Do not
 		call with pending writes you may want to roll back on failure; commit-and-compensate
@@ -148,6 +151,7 @@ class FlowSession(Document):
 
 		self.reload()
 		self._assert_not_blocked()
+
 		attachment_data = self._load_attachments(attachments)
 		if not self.title:
 			self.db_set("title", derive_title(input))
@@ -160,11 +164,11 @@ class FlowSession(Document):
 			reference_doctype=reference_doctype,
 			reference_name=reference_name,
 			config_snapshot=self._snapshot,
+			page_context=page_context,
 		)
 		self._persist_turn(input, attachment_data, run.name)
 		self._index_retrieval_attachments(run.name, {d["file"]: d["extracted_text"] for d in attachment_data})
-		run_input = self._build_prompt_messages()
-
+		run_input = self._build_prompt_messages(page_context=parse_page_context(run.page_context))
 		# Release row locks and publish the Running run before the long model call, so a
 		# concurrent turn doesn't block on the Flow Session row until lock timeout (1205).
 		if not frappe.flags.in_test:
@@ -283,11 +287,17 @@ class FlowSession(Document):
 				frappe.log_error(title="Chat attachment indexing failed")
 				row.db_set("mode", "Inline")
 
-	def resume(self, answers: dict[str, Any], *, stream: bool = False) -> FlowRun | Generator[Event]:
-		"""Resume this session's paused run with the user's answers."""
+	def resume(
+		self,
+		answers: dict[str, Any],
+		*,
+		run_name: str | None = None,
+		stream: bool = False,
+	) -> FlowRun | Generator[Event]:
+		"""Resume a paused run with the page snapshot captured for that exact turn."""
 		from flow.flow.doctype.flow_run.flow_run import stream_with_persistence
 
-		run_name = frappe.db.get_value(
+		run_name = run_name or frappe.db.get_value(
 			"Flow Run",
 			{"session": self.name, "status": "Paused"},
 			"name",
@@ -296,9 +306,12 @@ class FlowSession(Document):
 		if not run_name:
 			frappe.throw(_("This session has no paused run to resume."), title=_("Nothing to Resume"))
 		run = frappe.get_doc("Flow Run", run_name)
+		if run.session != self.name or run.status != "Paused":
+			frappe.throw(_("This run cannot be resumed from this session."), title=_("Cannot Resume"))
 
 		self.reload()
-		messages = self._build_prompt_messages()
+		page_context = revalidate_page_context(parse_page_context(run.page_context))
+		messages = self._build_prompt_messages(page_context=page_context)
 		if not messages:
 			frappe.throw(_("This session has no transcript to resume from."))
 
@@ -316,7 +329,10 @@ class FlowSession(Document):
 		run.apply_result(result)
 		return run
 
-	def _build_prompt_messages(self) -> list[dict[str, Any]]:
+	def _build_prompt_messages(
+		self,
+		page_context: dict[str, Any] | None = None,
+	) -> list[dict[str, Any]]:
 		"""Transcript as sent to the model. Augmentation is ephemeral — stored messages stay
 		clean (file text lives only in the attachments child table):
 
@@ -324,6 +340,7 @@ class FlowSession(Document):
 		- Retrieval files: a short note marks where each was attached; for the latest user turn
 		  the most relevant chunks (by that turn's query) are injected in place of the full text.
 		- Agent memory: the agent's saved memories are appended to the system message.
+		- Page context: the current turn's bounded snapshot is appended to the latest user message.
 		"""
 		from flow.knowledge.retriever import retrieve_attachments
 		from flow.memory.memory import build_memory_block
@@ -353,10 +370,21 @@ class FlowSession(Document):
 
 		memory_block = build_memory_block(self.agent, query=self._latest_user_content())
 		if memory_block:
-			if messages and messages[0]["role"] == "system":
-				messages[0]["content"] = f"{messages[0]['content']}\n\n{memory_block}"
-			else:
-				messages.insert(0, {"role": "system", "content": memory_block})
+			_append_system_context(messages, memory_block)
+			budget = max(0, budget - len(memory_block))
+
+		if page_context:
+			context_block = format_page_context(page_context)
+			if context_block:
+				context_budget = max(0, budget - 2)  # separator appended to the user message
+				context_block, truncated = _clamp(context_block, context_budget)
+				if context_block and truncated:
+					marker = _("\n[Page context truncated to fit the model context window.]")
+					if context_budget > len(marker):
+						context_block, _was_truncated = _clamp(context_block, context_budget - len(marker))
+						context_block += marker
+				if context_block:
+					_append_user_context(messages, context_block)
 		return messages
 
 	def _latest_user_run(self) -> str | None:
@@ -507,3 +535,35 @@ def derive_title(text: str) -> str:
 	if len(cleaned) <= TITLE_MAX_LENGTH:
 		return cleaned
 	return cleaned[: TITLE_MAX_LENGTH - 1].rstrip() + "…"
+
+
+def _append_system_context(
+	messages: list[dict[str, Any]],
+	content: str,
+) -> None:
+	if not content:
+		return
+
+	if messages and messages[0].get("role") == "system":
+		existing = messages[0].get("content") or ""
+		messages[0]["content"] = f"{existing}\n\n{content}".strip()
+		return
+
+	messages.insert(
+		0,
+		{
+			"role": "system",
+			"content": content,
+		},
+	)
+
+
+def _append_user_context(messages: list[dict[str, Any]], content: str) -> None:
+	if not content:
+		return
+	for message in reversed(messages):
+		if message.get("role") == "user":
+			existing = message.get("content") or ""
+			message["content"] = f"{existing}\n\n{content}".strip()
+			return
+	messages.append({"role": "user", "content": content})

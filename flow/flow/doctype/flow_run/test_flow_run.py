@@ -9,6 +9,7 @@ from frappe.tests import IntegrationTestCase
 from flow.flow.doctype.flow_run.flow_run import create_run, persist_result
 from flow.lib.agent import Question, RunResult
 from flow.lib.model import ToolCall
+from flow.lib.page_context import PAGE_CONTEXT_MAX_CONTENT_CHARS, build_page_context
 
 
 def _completed_result(output: str = "all done") -> RunResult:
@@ -196,6 +197,28 @@ class TestFlowRunPersistence(IntegrationTestCase):
 
 		self.assertEqual(json.loads(doc.config_snapshot), snapshot)
 		self.assertEqual(doc.status, "Running")
+
+	def test_create_run_persists_page_context(self):
+		session = _new_session(self.agent)
+		page_context = {"type": "route", "route": ["query-report", "Sales Analytics"]}
+
+		doc = create_run(source="Manual", input="hi", session=session, page_context=page_context)
+
+		self.assertEqual(json.loads(doc.page_context), page_context)
+
+	def test_persisted_built_page_context_respects_total_cap(self):
+		session = _new_session(self.agent)
+		page_context = build_page_context(
+			{
+				"type": "route",
+				"route": ["query-report", "Sales Analytics"],
+				"page_text": "x" * (PAGE_CONTEXT_MAX_CONTENT_CHARS + 100),
+			}
+		)
+
+		doc = create_run(source="Manual", input="hi", session=session, page_context=page_context)
+
+		self.assertLessEqual(len(doc.page_context), PAGE_CONTEXT_MAX_CONTENT_CHARS)
 
 	def test_mark_failed_sets_status_and_error(self):
 		session = _new_session(self.agent)

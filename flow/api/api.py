@@ -24,19 +24,25 @@ def start_run(
 	session: str | None = None,
 	model: str | None = None,
 	attachments: list[str] | str | None = None,
+	page_context: dict[str, Any] | str | None = None,
 	stream: bool | str = False,
 ) -> dict[str, Any] | Response:
-	"""Start a new turn. Creates a session if none is given. `attachments` are uploaded File
-	names whose text is injected into this turn. With `stream=True`, returns SSE."""
+	"""Start a new turn. Creates a session if none is given. Attachments and an optional,
+	permission-checked Desk page snapshot are injected into this turn. With `stream=True`, returns SSE."""
 	if not isinstance(input, str) or not input.strip():
 		frappe.throw(_("Input is required."), title=_("Invalid Input"))
 
+	from flow.lib.page_context import build_page_context
 	from flow.lib.session import load_session, new_session
 
+	if isinstance(page_context, str):
+		page_context = frappe.parse_json(page_context)
+
+	context = build_page_context(page_context)
 	stream = _is_truthy(stream)
 	files = _parse_attachments(attachments)
 	convo = load_session(session, agent=agent, model=model) if session else new_session(agent, model=model)
-	out = convo.chat(input, attachments=files, stream=stream)
+	out = convo.chat(input, attachments=files, page_context=context, stream=stream)
 	return _sse_response(out) if stream else _summarize(out)
 
 
@@ -58,7 +64,7 @@ def resume_run(
 			title=_("Cannot Resume"),
 		)
 
-	out = load_session(run.session).resume(parsed_answers, stream=stream)
+	out = load_session(run.session).resume(parsed_answers, run_name=run.name, stream=stream)
 	return _sse_response(out) if stream else _summarize(out)
 
 

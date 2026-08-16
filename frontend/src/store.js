@@ -3,6 +3,7 @@ import * as api from "@/api/client";
 import { startRun, resumeRun } from "@/api/stream";
 import { normalizeToolName } from "@/lib/toolMeta";
 import { readPanelState } from "@/lib/panelState";
+import { getPageContextIdentity } from "@/lib/pageContext";
 import { __ } from "@/lib/translate";
 
 // Module-singleton store: one panel instance, one source of truth. Components
@@ -39,6 +40,11 @@ const fullscreen = ref(false);
 const scrollTick = ref(0);
 const forceScroll = ref(false);
 const focusTick = ref(0);
+// Page changes are suggested explicitly; accepting arms that exact page for one message.
+const pageContextRequest = ref(null);
+const pageContextSuggestion = ref(null);
+let attachedPageContextKeys = new Set();
+let dismissedPageContextKeys = new Set();
 
 // ── derived ───────────────────────────────────────────────────────────────
 const locked = computed(() => messages.value.length > 0);
@@ -48,6 +54,66 @@ const paused = computed(() => {
 	const last = messages.value[messages.value.length - 1];
 	return Boolean(last?.questions?.length);
 });
+
+function offerPageContext(identity, { force = false } = {}) {
+	if (!identity?.key) return;
+	if (pageContextRequest.value?.key !== identity.key) pageContextRequest.value = null;
+	if (pageContextRequest.value?.key === identity.key) {
+		pageContextSuggestion.value = null;
+		return;
+	}
+	if (
+		!force &&
+		(attachedPageContextKeys.has(identity.key) || dismissedPageContextKeys.has(identity.key))
+	) {
+		pageContextSuggestion.value = null;
+		return;
+	}
+	pageContextSuggestion.value = identity;
+}
+
+function clearPageContextSuggestion() {
+	pageContextSuggestion.value = null;
+}
+
+function armPageContext(identity) {
+	if (!identity?.key) return;
+	dismissedPageContextKeys.add(identity.key);
+	pageContextSuggestion.value = null;
+	pageContextRequest.value = { ...identity, requestId: Date.now() };
+}
+
+function acceptPageContextSuggestion() {
+	armPageContext(pageContextSuggestion.value);
+}
+
+function cancelPageContextRequest() {
+	pageContextRequest.value = null;
+}
+
+function dismissPageContextSuggestion() {
+	if (pageContextSuggestion.value?.key) {
+		dismissedPageContextKeys.add(pageContextSuggestion.value.key);
+	}
+	pageContextSuggestion.value = null;
+}
+
+function markPageContextAttached(identity) {
+	if (!identity?.key) return;
+	attachedPageContextKeys.add(identity.key);
+	dismissedPageContextKeys.add(identity.key);
+	pageContextRequest.value = null;
+	pageContextSuggestion.value = null;
+}
+
+function resetPageContextState({ offerCurrent = false } = {}) {
+	attachedPageContextKeys = new Set();
+	dismissedPageContextKeys = new Set();
+	pageContextRequest.value = null;
+	pageContextSuggestion.value = null;
+	const identity = offerCurrent ? getPageContextIdentity() : null;
+	if (identity?.type === "document") offerPageContext(identity);
+}
 
 function agentLabel(name) {
 	return agents.value.find((a) => a.name === name)?.title || name;
@@ -135,6 +201,7 @@ function newChat() {
 	runName.value = null;
 	messages.value = [];
 	attachments.value = [];
+	resetPageContextState({ offerCurrent: true });
 	focusTick.value++;
 }
 
@@ -184,6 +251,7 @@ async function switchSession(name) {
 	runName.value = null;
 	messages.value = [];
 	attachments.value = [];
+	resetPageContextState({ offerCurrent: true });
 
 	// A prior stream cut off mid-flight may have left a Running run; clear it so the
 	// reloaded session can start a new turn instead of being blocked.
@@ -269,7 +337,7 @@ async function restorePausedRun(session) {
 // Aborts the in-flight stream when the user stops the response.
 let abortController = null;
 
-async function send(text) {
+async function send(text, options = {}) {
 	text = text.trim();
 	if (!text || sending.value || paused.value || uploading.value) return;
 
@@ -288,9 +356,13 @@ async function send(text) {
 		await startRun(
 			{
 				input: text,
+				...(options.pageContext && {
+					page_context: options.pageContext,
+				}),
 				...(files.length && { attachments: files }),
 				...(sessionName.value && { session: sessionName.value }),
-				...(selectedAgent.value && !sessionName.value && { agent: selectedAgent.value }),
+				...(selectedAgent.value &&
+					!sessionName.value && { agent: selectedAgent.value }),
 				...(selectedModel.value && { model: selectedModel.value }),
 			},
 			(event) => handleEvent(event, assistant),
@@ -529,6 +601,8 @@ export function useStore() {
 		scrollTick,
 		forceScroll,
 		focusTick,
+		pageContextRequest,
+		pageContextSuggestion,
 		// derived
 		locked,
 		needsSetup,
@@ -542,6 +616,13 @@ export function useStore() {
 		refreshHistory,
 		setAgent,
 		setModel,
+		offerPageContext,
+		clearPageContextSuggestion,
+		armPageContext,
+		acceptPageContextSuggestion,
+		cancelPageContextRequest,
+		dismissPageContextSuggestion,
+		markPageContextAttached,
 		newChat,
 		switchSession,
 		send,

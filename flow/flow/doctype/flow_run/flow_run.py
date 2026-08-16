@@ -15,7 +15,7 @@ from frappe.model.document import Document
 if TYPE_CHECKING:
 	from flow.lib.agent import Event, RunResult
 
-JSON_FIELDS = ("tool_calls", "questions", "usage", "config_snapshot")
+JSON_FIELDS = ("tool_calls", "questions", "usage", "config_snapshot", "page_context")
 
 
 @dataclass
@@ -49,6 +49,7 @@ class FlowRun(Document):
 		input: DF.LongText | None
 		iterations: DF.Int
 		output: DF.LongText | None
+		page_context: DF.JSON | None
 		questions: DF.JSON | None
 		reference_doctype: DF.Link | None
 		reference_name: DF.DynamicLink | None
@@ -125,6 +126,7 @@ def create_run(
 	reference_doctype: str | None = None,
 	reference_name: str | None = None,
 	config_snapshot: dict[str, Any] | None = None,
+	page_context: dict[str, Any] | None = None,
 ) -> FlowRun:
 	"""Create a new Flow Run row in the Running state. `session` is required — every run
 	belongs to a Flow Session (which carries the transcript and agent linkage)."""
@@ -138,6 +140,7 @@ def create_run(
 			"reference_name": reference_name,
 			"session": session,
 			"config_snapshot": _dump_json(config_snapshot) if config_snapshot else None,
+			"page_context": _dump_json(page_context) if page_context else None,
 			"status": "Running",
 		}
 	).insert(ignore_permissions=True)
@@ -154,6 +157,7 @@ def persist_result(
 	reference_doctype: str | None = None,
 	reference_name: str | None = None,
 	config_snapshot: dict[str, Any] | None = None,
+	page_context: dict[str, Any] | None = None,
 ) -> FlowRun:
 	"""Convenience: create a row and immediately apply a finished RunResult."""
 	doc = create_run(
@@ -164,6 +168,7 @@ def persist_result(
 		reference_doctype=reference_doctype,
 		reference_name=reference_name,
 		config_snapshot=config_snapshot,
+		page_context=page_context,
 	)
 	doc.apply_result(result)
 	return doc
@@ -232,7 +237,7 @@ def _new_messages_for_session(session: str, full_transcript: list[dict[str, Any]
 def _dump_json(value: Any) -> str | None:
 	if value is None:
 		return None
-	return json.dumps(value, default=str)
+	return json.dumps(value, default=str, separators=(",", ":"))
 
 
 def _merge_usage(existing: str | None, new: dict[str, int]) -> dict[str, int]:

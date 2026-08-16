@@ -9,7 +9,7 @@ from frappe.tests import IntegrationTestCase
 
 from flow.memory import store
 from flow.memory.memory import build_memory_block, save_memory
-from flow.tools.builtins import sync_builtin_tools
+from flow.tools.builtins import bind_update_memory, sync_builtin_tools
 
 EXTRA_TEST_RECORD_DEPENDENCIES = []
 IGNORE_TEST_RECORD_DEPENDENCIES = []
@@ -53,6 +53,14 @@ class IntegrationTestFlowAgentMemory(IntegrationTestCase):
 	def tearDown(self):
 		frappe.db.rollback()
 		store.drop_table()
+
+	def test_update_memory_requires_confirmation(self):
+		memory_tool = bind_update_memory(self.agent.name)
+		self.assertTrue(memory_tool.requires_confirmation)
+		self.assertIn(
+			"Widget mapping",
+			memory_tool.confirm_prompt({"scope": "agent", "content": "Widget mapping"}),
+		)
 
 	def test_agent_scope_clears_user(self):
 		doc = frappe.get_doc(_memory(self.agent.name, user="Administrator")).insert()

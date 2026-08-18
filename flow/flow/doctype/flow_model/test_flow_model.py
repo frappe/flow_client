@@ -7,7 +7,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from flow.flow.doctype.flow_model.flow_model import _detect_context_window
+from flow.flow.doctype.flow_model.flow_model import FlowModel, _detect_context_window, _is_embedding_model
 
 
 def _model(**overrides: Any) -> dict:
@@ -180,3 +180,64 @@ class TestContextWindow(IntegrationTestCase):
 			doc.model_id = "anthropic/made-up-model-xyz"
 			doc.save()
 		self.assertEqual(doc.context_window, 128000)
+
+
+class TestFlowModelConnection(IntegrationTestCase):
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def test_detects_mapped_embedding_model(self):
+		with patch("litellm.get_model_info", return_value={"mode": "embedding"}):
+			self.assertTrue(_is_embedding_model("vendor/vector-model"))
+
+	def test_detects_unmapped_embedding_model_by_name(self):
+		with patch("litellm.get_model_info", side_effect=Exception("not mapped")):
+			self.assertTrue(_is_embedding_model("openai/text-embedding-v4"))
+
+	def test_connection_uses_embedding_endpoint_for_unmapped_embedding_model(self):
+		doc = frappe.get_doc(
+			_model(model_id="openai/text-embedding-v4", base_url="https://api.example.com/v1")
+		)
+
+		with (
+			patch.object(FlowModel, "check_permission"),
+			patch.object(FlowModel, "get_password", return_value="sk-test"),
+			patch("flow.lib.model.resolve_provider_credentials", return_value={}),
+			patch("litellm.get_model_info", side_effect=Exception("not mapped")),
+			patch("litellm.embedding") as embedding,
+			patch("litellm.completion") as completion,
+		):
+			result = doc.test_connection()
+
+		embedding.assert_called_once_with(
+			model="openai/text-embedding-v4",
+			api_key="sk-test",
+			timeout=15,
+			api_base="https://api.example.com/v1",
+			input=["ping"],
+			encoding_format="float",
+		)
+		completion.assert_not_called()
+		self.assertTrue(result["ok"])
+
+	def test_connection_keeps_chat_models_on_completion_endpoint(self):
+		doc = frappe.get_doc(_model(model_id="openai/gpt-4o-mini"))
+
+		with (
+			patch.object(FlowModel, "check_permission"),
+			patch.object(FlowModel, "get_password", return_value="sk-test"),
+			patch("flow.lib.model.resolve_provider_credentials", return_value={}),
+			patch("litellm.get_model_info", return_value={"mode": "chat"}),
+			patch("litellm.embedding") as embedding,
+			patch("litellm.completion") as completion,
+		):
+			doc.test_connection()
+
+		embedding.assert_not_called()
+		completion.assert_called_once_with(
+			model="openai/gpt-4o-mini",
+			api_key="sk-test",
+			timeout=15,
+			messages=[{"role": "user", "content": "ping"}],
+			max_tokens=1,
+		)

@@ -69,7 +69,7 @@ def _embed_batch(texts: list[str], config: dict[str, Any], *, timeout: int) -> l
 	import litellm
 
 	try:
-		response = litellm.embedding(input=texts, timeout=timeout, **config)
+		response = litellm.embedding(input=texts, timeout=timeout, encoding_format="float", **config)
 	except Exception as e:
 		frappe.throw(str(e)[:500] or type(e).__name__, title=_("Embedding Failed"))
 

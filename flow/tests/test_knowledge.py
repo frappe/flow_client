@@ -193,6 +193,7 @@ class TestEmbedder(IntegrationTestCase):
 		self.assertEqual(kwargs["model"], "openai/text-embedding-3-small")
 		self.assertEqual(kwargs["api_key"], "sk-test")
 		self.assertEqual(kwargs["input"], ["a", "b"])
+		self.assertEqual(kwargs["encoding_format"], "float")
 
 	def test_embed_texts_batches_large_input(self):
 		texts = [f"t{i}" for i in range(100)]

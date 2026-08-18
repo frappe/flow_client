@@ -139,19 +139,39 @@ class FlowModel(Document):
 		kwargs = {
 			"model": self.model_id,
 			"api_key": api_key,
-			"messages": [{"role": "user", "content": "ping"}],
-			"max_tokens": 1,
 			"timeout": 15,
 		}
 		if base_url:
 			kwargs["api_base"] = base_url
 
 		try:
-			litellm.completion(**kwargs)
+			if _is_embedding_model(self.model_id):
+				litellm.embedding(input=["ping"], encoding_format="float", **kwargs)
+			else:
+				litellm.completion(
+					messages=[{"role": "user", "content": "ping"}],
+					max_tokens=1,
+					**kwargs,
+				)
 		except Exception as e:
 			frappe.throw(str(e)[:500] or type(e).__name__, title=_(type(e).__name__))
 
 		return {"ok": True, "message": _("Connection OK")}
+
+
+def _is_embedding_model(model_id: str) -> bool:
+	"""Whether ``model_id`` should be tested through the embeddings endpoint."""
+	import litellm
+
+	try:
+		if litellm.get_model_info(model_id).get("mode") == "embedding":
+			return True
+	except Exception:
+		# Custom OpenAI-compatible models are often absent from LiteLLM's registry.
+		pass
+
+	model_name = model_id.rsplit("/", 1)[-1].lower()
+	return "embedding" in model_name
 
 
 def _detect_context_window(model_id: str) -> int:

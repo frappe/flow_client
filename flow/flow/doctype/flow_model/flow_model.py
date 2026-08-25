@@ -10,6 +10,7 @@ from frappe import _
 from frappe.model.document import Document
 
 MODEL_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_\-]*\/[A-Za-z0-9][A-Za-z0-9_\-:.\/]*$")
+CONNECTION_TEST_MAX_TOKENS = 100  # Safely above provider minimums for connection probes.
 
 RESERVED_PARAM_KEYS = frozenset(
 	{"model", "api_key", "api_base", "base_url", "messages", "stream", "tools", "tool_choice"}
@@ -26,6 +27,7 @@ class FlowModel(Document):
 		from frappe.types import DF
 
 		api_key: DF.Password | None
+		api_style: DF.Literal["Auto", "Chat Completions", "Responses"]
 		base_url: DF.Data | None
 		context_window: DF.Int
 		enabled: DF.Check
@@ -130,14 +132,15 @@ class FlowModel(Document):
 				title=_("Missing Dependency"),
 			)
 
-		from flow.lib.model import resolve_provider_credentials
+		from flow.lib.model import API_STYLE_AUTO, resolve_provider_credentials, route_model_id
 
+<<<<<<< HEAD
 		provider_creds = resolve_provider_credentials(self.model_id)
 		api_key = self.get_password("api_key", raise_exception=False) or provider_creds.get("api_key") or None
 		base_url = self.base_url or provider_creds.get("base_url")
 
 		kwargs = {
-			"model": self.model_id,
+			"model": route_model_id(self.model_id, self.api_style or API_STYLE_AUTO, base_url),
 			"api_key": api_key,
 			"messages": [{"role": "user", "content": "ping"}],
 			"max_tokens": 1,
@@ -145,6 +148,11 @@ class FlowModel(Document):
 		}
 		if base_url:
 			kwargs["api_base"] = base_url
+=======
+		model = Model(self.name)
+		kwargs = model.completion_kwargs([{"role": "user", "content": "ping"}])
+		kwargs.update(max_tokens=CONNECTION_TEST_MAX_TOKENS, timeout=15)
+>>>>>>> d2dc476 (fix: use valid Responses connection-test token limit)
 
 		try:
 			litellm.completion(**kwargs)

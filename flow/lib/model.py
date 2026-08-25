@@ -11,6 +11,10 @@ from typing import Any
 import frappe
 
 DEFAULT_TIMEOUT = 60
+API_STYLE_AUTO = "Auto"
+API_STYLE_RESPONSES = "Responses"
+API_STYLE_CHAT_COMPLETIONS = "Chat Completions"
+API_STYLES = frozenset({API_STYLE_AUTO, API_STYLE_RESPONSES, API_STYLE_CHAT_COMPLETIONS})
 
 
 @dataclass
@@ -50,9 +54,10 @@ class Model:
 		base_url: str | None = None,
 		params: dict[str, Any] | None = None,
 		timeout: int = DEFAULT_TIMEOUT,
+		api_style: str | None = None,
 	):
 		if name is not None:
-			if model_id or api_key or base_url or params:
+			if model_id or api_key or base_url or params or api_style is not None:
 				raise ValueError("Pass either a Flow Model doc name or explicit kwargs, not both.")
 			doc = frappe.get_doc("Flow Model", name)
 			if not doc.enabled:
@@ -61,9 +66,13 @@ class Model:
 			api_key = doc.get_password("api_key", raise_exception=False)
 			base_url = doc.base_url or None
 			params = json.loads(doc.params) if doc.params else {}
+			api_style = getattr(doc, "api_style", None) or API_STYLE_AUTO
 
 		if not model_id:
 			raise ValueError("model_id is required")
+		api_style = api_style or API_STYLE_AUTO
+		if api_style not in API_STYLES:
+			raise ValueError(f"api_style must be one of {sorted(API_STYLES)}, got {api_style!r}")
 
 		# Fall back to the central Flow Provider store for anything not set on the model itself.
 		provider_creds = resolve_provider_credentials(model_id)
@@ -77,6 +86,7 @@ class Model:
 		self.base_url = base_url
 		self.params = params or {}
 		self.timeout = timeout
+		self.api_style = api_style
 
 	def chat(
 		self,
@@ -93,7 +103,7 @@ class Model:
 			messages = [{"role": "user", "content": messages}]
 
 		kwargs: dict[str, Any] = {
-			"model": self.model_id,
+			"model": route_model_id(self.model_id, self.api_style, self.base_url),
 			"api_key": self._api_key,
 			"messages": messages,
 			"timeout": self.timeout,
@@ -110,6 +120,30 @@ class Model:
 			return _consume_stream(litellm.completion(**kwargs))
 
 		return _normalize(litellm.completion(**kwargs))
+
+
+def route_model_id(model_id: str, api_style: str | None = None, base_url: str | None = None) -> str:
+	"""Return the LiteLLM model ID for the selected OpenAI API style.
+
+	LiteLLM's completion compatibility layer selects the Responses API when the
+	OpenAI provider-relative model starts with ``responses/``. Other providers,
+	and custom endpoints in Auto mode, retain LiteLLM's default routing.
+	"""
+	api_style = api_style or API_STYLE_AUTO
+	if api_style not in API_STYLES:
+		raise ValueError(f"api_style must be one of {sorted(API_STYLES)}, got {api_style!r}")
+	if not model_id.startswith("openai/"):
+		return model_id
+
+	provider_model = model_id.removeprefix("openai/")
+	is_responses_model = provider_model.startswith("responses/")
+	use_responses = api_style == API_STYLE_RESPONSES or (api_style == API_STYLE_AUTO and not base_url)
+
+	if use_responses and not is_responses_model:
+		return f"openai/responses/{provider_model}"
+	if api_style == API_STYLE_CHAT_COMPLETIONS and is_responses_model:
+		return f"openai/{provider_model.removeprefix('responses/')}"
+	return model_id
 
 
 def resolve_provider_credentials(model_id: str) -> dict[str, Any]:

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from flow.flow.doctype.flow_model.flow_model import _detect_context_window
+from flow.flow.doctype.flow_model.flow_model import CONNECTION_TEST_MAX_TOKENS, _detect_context_window
 
 
 def _model(**overrides: Any) -> dict:
@@ -29,6 +29,7 @@ class TestFlowModelValidation(IntegrationTestCase):
 		doc = frappe.get_doc(_model()).insert()
 
 		self.assertEqual(doc.model_id, "openai/gpt-4o-mini")
+		self.assertEqual(doc.api_style, "Auto")
 		self.assertTrue(doc.enabled)
 
 	def test_normalize_strips_whitespace(self):
@@ -139,6 +140,25 @@ class TestFlowModelParams(IntegrationTestCase):
 				doc = frappe.get_doc(_model(params=f'{{"{reserved}": "x"}}'))
 				with self.assertRaisesRegex(frappe.ValidationError, "reserved keys"):
 					doc.insert()
+
+
+class TestFlowModelConnection(IntegrationTestCase):
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def test_connection_uses_shared_responses_route(self):
+		doc = frappe.get_doc(_model()).insert()
+
+		with (
+			patch("flow.lib.model.resolve_provider_credentials", return_value={}),
+			patch("litellm.completion") as completion,
+		):
+			result = doc.test_connection()
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(completion.call_args.kwargs["model"], "openai/responses/gpt-4o-mini")
+		self.assertEqual(completion.call_args.kwargs["messages"], [{"role": "user", "content": "ping"}])
+		self.assertEqual(completion.call_args.kwargs["max_tokens"], CONNECTION_TEST_MAX_TOKENS)
 
 
 class TestContextWindow(IntegrationTestCase):

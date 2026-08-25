@@ -11,6 +11,7 @@
   "section_break_config",
   "provider",
   "model_id",
+  "api_style",
   "context_window",
   "api_key",
   "base_url",
@@ -51,6 +52,14 @@
    "reqd": 1
   },
   {
+   "default": "Auto",
+   "description": "API used for official OpenAI models. Auto uses Responses for direct OpenAI connections and LiteLLM defaults for custom endpoints and other providers.",
+   "fieldname": "api_style",
+   "fieldtype": "Select",
+   "label": "API Style",
+   "options": "Auto\nResponses\nChat Completions"
+  },
+  {
    "description": "Max input tokens. Auto-detected from the model on save; managed by Flow, not user-editable. 0 = unknown.",
    "fieldname": "context_window",
    "fieldtype": "Int",
@@ -86,7 +95,7 @@
   }
  ],
  "links": [],
- "modified": "2026-07-04 00:00:00.000000",
+ "modified": "2026-07-06 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Flow",
  "name": "Flow Model",

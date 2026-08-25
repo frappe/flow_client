@@ -6,7 +6,15 @@ from unittest.mock import patch
 
 from frappe.tests import UnitTestCase
 
-from flow.lib.model import ChatResponse, Model, ToolCall, ToolCallBegin
+from flow.lib.model import (
+	API_STYLE_CHAT_COMPLETIONS,
+	API_STYLE_RESPONSES,
+	ChatResponse,
+	Model,
+	ToolCall,
+	ToolCallBegin,
+	route_model_id,
+)
 
 
 def _fake_response(content=None, tool_calls=None, finish_reason="stop", usage=None):
@@ -68,6 +76,7 @@ class TestModel(UnitTestCase):
 		self.assertEqual(m.model_id, "anthropic/claude-sonnet-4-6")
 		self.assertEqual(m._api_key, "sk-stored")
 		self.assertEqual(m.params, {"temperature": 0.3})
+		self.assertEqual(m.api_style, "Auto")
 
 	@patch("frappe.get_doc")
 	def test_init_rejects_disabled_doc(self, mock_get_doc):
@@ -124,6 +133,7 @@ class TestModel(UnitTestCase):
 		self.assertEqual(call.name, "get_weather")
 		self.assertEqual(call.arguments, {"city": "Mumbai"})
 		self.assertEqual(resp.finish_reason, "tool_calls")
+		self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/responses/gpt-4.1")
 
 	@patch("litellm.completion")
 	def test_chat_returns_error_for_invalid_tool_arguments(self, mock_completion):
@@ -162,6 +172,7 @@ class TestModel(UnitTestCase):
 		self.assertEqual(response.finish_reason, "stop")
 		self.assertEqual(response.usage["total_tokens"], 7)
 		self.assertEqual(response.tool_calls, [])
+		self.assertEqual(mock_completion.call_args.kwargs["model"], "openai/responses/gpt-4.1")
 
 	@patch("litellm.completion")
 	def test_chat_stream_assembles_tool_calls_across_chunks(self, mock_completion):
@@ -237,3 +248,49 @@ class TestModel(UnitTestCase):
 		self.assertEqual(kwargs["max_tokens"], 100)
 		self.assertEqual(kwargs["tools"], tools)
 		self.assertEqual(kwargs["timeout"], 60)
+
+	def test_route_model_id_auto_routes_only_direct_openai(self):
+		self.assertEqual(route_model_id("openai/gpt-4.1"), "openai/responses/gpt-4.1")
+		self.assertEqual(
+			route_model_id("openai/gpt-4.1", base_url="https://proxy.example.com/v1"),
+			"openai/gpt-4.1",
+		)
+		self.assertEqual(route_model_id("anthropic/claude-sonnet-4-6"), "anthropic/claude-sonnet-4-6")
+
+	def test_route_model_id_honors_explicit_openai_overrides(self):
+		self.assertEqual(
+			route_model_id(
+				"openai/gpt-4.1",
+				API_STYLE_RESPONSES,
+				"https://proxy.example.com/v1",
+			),
+			"openai/responses/gpt-4.1",
+		)
+		self.assertEqual(
+			route_model_id("openai/responses/gpt-4.1", API_STYLE_CHAT_COMPLETIONS),
+			"openai/gpt-4.1",
+		)
+
+	@patch("litellm.completion")
+	def test_chat_preserves_persisted_tool_result_messages_when_routing(self, mock_completion):
+		mock_completion.return_value = _fake_response(content="done")
+		messages = [
+			{
+				"role": "assistant",
+				"content": None,
+				"tool_calls": [
+					{
+						"id": "call_abc",
+						"type": "function",
+						"function": {"name": "get_weather", "arguments": '{"city":"Mumbai"}'},
+					}
+				],
+			},
+			{"role": "tool", "tool_call_id": "call_abc", "content": "sunny"},
+		]
+
+		Model(model_id="openai/gpt-4.1", api_key="sk-test").chat(messages)
+
+		kwargs = mock_completion.call_args.kwargs
+		self.assertEqual(kwargs["model"], "openai/responses/gpt-4.1")
+		self.assertEqual(kwargs["messages"], messages)

@@ -119,7 +119,7 @@ Install into an existing [bench](https://github.com/frappe/bench):
 ```bash
 cd $PATH_TO_YOUR_BENCH
 bench get-app flow
-bench --site site-name install-app flow
+bench --site site-name install-app flow_client
 ```
 
 Then add a `Flow Provider` with your API key and a `Flow Model` with a model ID such as `anthropic/claude-sonnet-4-6`, and open the Desk Flow panel to start. For local providers like Ollama or LM Studio, set `Base URL` on the provider or model.

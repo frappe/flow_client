@@ -24,7 +24,10 @@ const label = computed(() => toolLabel(props.part.name));
 const context = computed(() => toolContext(props.part.arguments));
 const error = computed(() => toolError(props.part.result));
 const expandable = computed(() => hasArgs(props.part.arguments) || Boolean(error.value));
-const blockKeys = computed(() => blockKeysFor(props.part.name));
+// The tool's own declaration of which arguments are code — the same static table the approval card
+// reads. Passed as `codeKeys` so `execute`'s Python keeps its real line breaks here too; every other
+// value in the activity log goes through the one display rule. See `CodeBlock.vue` for the rule.
+const codeKeys = computed(() => blockKeysFor(props.part.name));
 
 const open = ref(false);
 function toggle() {
@@ -80,7 +83,7 @@ function toggle() {
 				<span class="w-px" :class="{ 'bg-surface-gray-3': !last }"></span>
 			</div>
 			<div class="min-w-0 flex-1 pb-2">
-				<ArgsView :arguments="part.arguments" :block-keys="blockKeys" />
+				<ArgsView :arguments="part.arguments" :code-keys="codeKeys" />
 				<ToolError
 					v-if="error"
 					:message="error"

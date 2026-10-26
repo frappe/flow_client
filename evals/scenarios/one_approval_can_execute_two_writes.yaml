@@ -1,0 +1,35 @@
+name: one_approval_can_execute_two_writes
+description: >-
+  Two tool calls in one reply that share an id cannot be told apart, so one approval would answer
+  both. The reply is refused before anything runs. Named for the defect it was written to
+  reproduce; it now asserts the fix.
+user_message: pay alice
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+model_script:
+  - tool_calls:
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+expect:
+  # THE CLAIM: one approval answers one action. A reply whose calls cannot be told apart is
+  # refused before any tool runs, so there is no pause, no question and nothing executed —
+  # which is why there is no `pauses`, `tool_calls` or `after` block here, and why asking for
+  # one beside `raises` is refused by the loader.
+  #
+  # Specified against brain/10-specs/s17-one-approval-one-action.md. (The scenario previously
+  # pointed at brain/00-inbox/one-approval-can-execute-two-writes.md, which never existed.)
+  raises: "could not be told apart"
+  # Checked against the refusal itself: it reaches a person in a failed run's error field and
+  # over the stream, so it must name no platform, vendor or model.
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

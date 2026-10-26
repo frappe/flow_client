@@ -1,6 +1,7 @@
 import { ref, computed } from "vue";
 import * as api from "@/api/client";
 import { startRun, resumeRun } from "@/api/stream";
+import { answersPayload } from "@/lib/answers";
 import { normalizeToolName } from "@/lib/toolMeta";
 import { readPanelState } from "@/lib/panelState";
 import { __ } from "@/lib/translate";
@@ -20,7 +21,12 @@ const recentSessions = ref([]);
 
 // Active agent's tool slug → requires_confirmation; the cache keeps agent switches instant.
 const toolApproval = ref({});
-const toolApprovalCache = {};
+// A Map for the reason `LABELS` and `CODE_ARG_KEYS` are Maps: the key is a name from a record, and a
+// plain object answers for eight names it was never given. An Agent called `constructor` made `cached`
+// the `Object` function — truthy — so the real approval map was never awaited and no tool was
+// recognised as needing confirmation. Agent names are administrator-chosen rather than model-chosen,
+// which is why this is the small one of the three, but it is the same defect and takes the same fix.
+const toolApprovalCache = new Map();
 
 const selectedAgent = ref(null);
 const selectedModel = ref(null);
@@ -104,12 +110,12 @@ function loadToolApproval(agent) {
 		toolApproval.value = {};
 		return Promise.resolve();
 	}
-	const cached = toolApprovalCache[agent];
+	const cached = toolApprovalCache.get(agent);
 	if (cached) toolApproval.value = cached;
 	const refresh = api
 		.getAgentTools(agent)
 		.then((map) => {
-			toolApprovalCache[agent] = map;
+			toolApprovalCache.set(agent, map);
 			if (selectedAgent.value === agent) toolApproval.value = map;
 		})
 		.catch(() => {
@@ -374,9 +380,13 @@ function answerQuestion(msg, question, answer) {
 
 	if (msg.questions.some((q) => q._answer === undefined)) return;
 
-	const answers = {};
-	msg.questions.forEach((q) => (answers[q.key] = q._answer));
-	resume(answers, msg);
+	// `@/lib/answers` and not three lines here, because three lines here could not be tested: this
+	// module cannot be imported by a test, so the only assertion available was a grep of its source
+	// text — and a reviewer left the safe line in place, added a plain object beside it, sent that
+	// one, and the whole suite stayed green with the defect fully restored. The rule the function
+	// carries (a key that arrives from the model is DATA, and a plain object answers for eight names
+	// it was never given) is the same one `lib/toolMeta.js` applies to the display side.
+	resume(answersPayload(msg.questions), msg);
 }
 
 function handleEvent(event, msg) {
@@ -408,7 +418,9 @@ function handleEvent(event, msg) {
 			if (event.status === "Paused") {
 				msg.questions = prepareQuestions(event.questions);
 				msg.runName = runName.value;
-				requestScroll(true);
+				// Deliberately NOT requestScroll(true): the bottom of the list is the Approve
+				// button. The confirmation card scrolls its own top into view when it mounts, so
+				// the first line of the question is what lands on screen.
 			}
 			refreshHistory();
 			break;

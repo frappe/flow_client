@@ -1,0 +1,17 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/e5-confirm-prompt-field.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-19.",
+  "spec": "e5-confirm-prompt-field",
+  "features": [
+    { "id": 1, "description": "A record-defined tool with a template renders it, with the call's arguments substituted, as the question body — no JSON dump.", "passes": false },
+    { "id": 2, "description": "A tool with both a code callable and a record template uses the callable.", "passes": true },
+    { "id": 3, "description": "A tool with neither renders the JSON dump exactly as today.", "passes": true },
+    { "id": 4, "description": "A template that raises falls back to the JSON dump; the run still pauses and the question is still asked.", "passes": false },
+    { "id": 5, "description": "A template naming an argument the call did not supply falls back to the JSON dump rather than showing a blank where a value belongs.", "passes": true },
+    { "id": 6, "description": "A template cannot execute code or reach out of its sandbox: an attribute-escape attempt renders nothing dangerous and falls back.", "passes": false },
+    { "id": 7, "description": "A template whose text resembles a file path is rendered as text, not loaded from disk.", "passes": true },
+    { "id": 8, "description": "The first line uses the tool's human title when it has one, and the slug when it does not.", "passes": true },
+    { "id": 9, "description": "Options are exactly [Approve, Deny] and allow_other is unchanged, for every case above.", "passes": true },
+    { "id": 10, "description": "Only the exact answer Approve executes the tool, for a templated tool as for any other.", "passes": true },
+    { "id": 11, "description": "Upstream's TestAgentConfirmation stays green and unmodified.", "passes": true }
+  ]
+}

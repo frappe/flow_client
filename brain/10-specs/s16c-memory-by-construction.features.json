@@ -1,0 +1,21 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s16c-memory-by-construction.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-20 (unattended run 7).",
+  "spec": "s16c-memory-by-construction",
+  "features": [
+    { "id": 1, "description": "A memory tool bound for an unattended run returns the fixed not-kept result and writes no row, with the unattended flag explicitly False.", "passes": true },
+    { "id": 2, "description": "The same tool returns the same result whatever the flag says: unset, False, True.", "passes": true },
+    { "id": 3, "description": "The unattended tool never reaches the write path at all: with save_memory replaced by something that raises, it still returns the not-kept result.", "passes": true },
+    { "id": 4, "description": "Control: a tool bound the attended way does reach the write path, so the assertion above cannot pass vacuously.", "passes": true },
+    { "id": 5, "description": "After a non-streaming run returns, frappe.flags.flow_unattended is False and flow_run is None.", "passes": true },
+    { "id": 6, "description": "After a non-streaming run raises, frappe.flags.flow_unattended is False and flow_run is None.", "passes": true },
+    { "id": 7, "description": "The binding is not the only defence: a caller that built the tool the attended way inside an unattended run still writes nothing, because the flag refusal in save_memory remains.", "passes": true },
+    { "id": 8, "description": "A streamed run with a kept note present delivers the memory block exactly once, in the last user message, and completes.", "passes": true },
+    { "id": 9, "description": "The transcript stored by a streamed run with a note present contains no memory block and no message twice.", "passes": true },
+    { "id": 10, "description": "A run that exhausts its iteration budget writes no note and leaves no question a person can no longer answer.", "passes": true },
+    { "id": 11, "description": "A pending memory approval is never consumed by the iteration budget: the pausing turn returns Paused rather than exhausting it.", "passes": true },
+    { "id": 12, "description": "The file-injection budget is reduced by exactly the length of the memory block delivered this turn.", "passes": true },
+    { "id": 13, "description": "For a turn with no notes the budget is the number it was before this change, computed on the same session.", "passes": true },
+    { "id": 14, "description": "_invoke, _resolve_confirmation, _confirmation_question and _has_denial are unchanged, and upstream's TestAgentConfirmation is unmodified and green.", "passes": true },
+    { "id": 15, "description": "No text this change puts in front of the model or a person names the platform, a vendor or a model.", "passes": true }
+  ]
+}

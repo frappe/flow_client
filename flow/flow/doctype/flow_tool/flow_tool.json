@@ -16,6 +16,7 @@
   "section_break_description",
   "description",
   "summary",
+  "confirm_template",
   "section_break_definition",
   "import_path",
   "code"
@@ -60,6 +61,7 @@
    "label": "Enabled"
   },
   {
+   "default": "1",
    "description": "Pause the run and ask the user to approve each call before this tool executes.",
    "fieldname": "requires_confirmation",
    "fieldtype": "Check",
@@ -90,6 +92,13 @@
    "fieldname": "summary",
    "fieldtype": "Small Text",
    "label": "Summary (human-facing)"
+  },
+  {
+   "depends_on": "requires_confirmation",
+   "description": "Optional. A plain-language sentence shown above the arguments when someone is asked to approve this tool. Write it as ordinary text with {argument_name} placeholders, e.g. Post an invoice for {amount} to {customer}. Nothing else is substituted and nothing is evaluated. The exact arguments are ALWAYS shown underneath, so this changes what the question says, never what it authorises. If any value is missing, is not a single value, or is over 200 characters, the sentence is dropped and the arguments are shown alone.",
+   "fieldname": "confirm_template",
+   "fieldtype": "Small Text",
+   "label": "Approval Question"
   },
   {
    "fieldname": "section_break_definition",

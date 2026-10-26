@@ -1,0 +1,25 @@
+{
+  "_comment": "S19. One entry per acceptance test. Only `passes` may be flipped; never reword an entry.",
+  "spec": "brain/10-specs/s19-batch-is-one-decision.md",
+  "features": [
+    { "id": 1, "description": "Part A. An ungated call in the same reply as a gated one does not run before the person is asked.", "passes": true },
+    { "id": 2, "description": "Part A. The order the model put the calls in decides nothing: the whole batch is classified before any of it runs.", "passes": true },
+    { "id": 3, "description": "Part A. A held-back call executes on resume, in its original order, after the answers are in.", "passes": true },
+    { "id": 4, "description": "Part A. A denial holds back the calls nobody was asked about too, and tells the model they did not run.", "passes": true },
+    { "id": 5, "description": "Part A. A question a tool returns is not an approval: its neighbours still run, as upstream pins.", "passes": true },
+    { "id": 6, "description": "Part A. A turn with no approval in it is unchanged: same calls, same order, same number of model calls.", "passes": true },
+    { "id": 7, "description": "Part A. A pending call the person actually answered still records that answer as its result.", "passes": true },
+    { "id": 8, "description": "Part A. An answer for a call no question was raised for executes nothing and is never echoed back to the model.", "passes": true },
+    { "id": 9, "description": "Part A. A tool's own question left unanswered does not run that tool a second time.", "passes": true },
+    { "id": 10, "description": "Part A. The streamed loop holds back the same calls, opens no card for them, and leaves none spinning.", "passes": true },
+    { "id": 11, "description": "Part A. The pause and answer shapes the web apps read are unchanged.", "passes": true },
+    { "id": 12, "description": "Part B. An unattended run refuses a gated tool: it does not run and does not pause.", "passes": true },
+    { "id": 13, "description": "Part B. auto_approve alone still counts as unattended, so no existing caller changes meaning.", "passes": true },
+    { "id": 14, "description": "Part B. An unattended run still executes an ungated tool.", "passes": true },
+    { "id": 15, "description": "Part B. An attended run is unaffected: a gated tool still pauses and asks.", "passes": true },
+    { "id": 16, "description": "Part B. A trigger with auto_approve off refuses instead of parking the run in Paused, as the user it runs as.", "passes": true },
+    { "id": 17, "description": "Part B. A resume is never unattended: an approved gated call still executes.", "passes": true },
+    { "id": 18, "description": "Part B. The refusal text names no platform, vendor or model, and the check that says so can itself go red.", "passes": true },
+    { "id": 19, "description": "Part B. Only the _invoke digest moved; the other three load-bearing functions are byte-identical.", "passes": true }
+  ]
+}

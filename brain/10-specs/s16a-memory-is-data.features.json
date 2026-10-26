@@ -1,0 +1,25 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s16a-memory-is-data.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-20 (unattended run 6).",
+  "spec": "s16a-memory-is-data",
+  "features": [
+    { "id": 1, "description": "update_memory requires confirmation in the tool definition, so sync_builtin_tools writes the gate onto its Flow Tool row and a migrate restores it.", "passes": true },
+    { "id": 2, "description": "A chat run whose model calls update_memory pauses and executes nothing until the exact answer Approve.", "passes": true },
+    { "id": 3, "description": "The approval question shows the exact note text, who will be able to read it, and whether it adds or replaces.", "passes": true },
+    { "id": 4, "description": "Control and format characters in the note are shown escaped in the question, so a note cannot write a second question or reorder the one being asked.", "passes": true },
+    { "id": 5, "description": "A tool call asking for agent scope is refused with a not_executed result and writes nothing.", "passes": true },
+    { "id": 6, "description": "A tool call passing the memory_id of an agent-scope row is refused with a not_executed result and changes nothing.", "passes": true },
+    { "id": 7, "description": "A user-scope write still works end to end and is stamped with the session user, not the model's claim.", "passes": true },
+    { "id": 8, "description": "An unattended run (a trigger, or auto_approve) writes no memory, is refused with a not_executed result, and does not pause.", "passes": true },
+    { "id": 9, "description": "save_memory still writes agent scope for a caller that asks for it explicitly, so the desk path is unchanged.", "passes": true },
+    { "id": 10, "description": "A thumbs-down comment creates a user-scope memory stamped with the person who gave it, never a shared one.", "passes": true },
+    { "id": 11, "description": "The memory block appears in no system-role message of the prompt.", "passes": true },
+    { "id": 12, "description": "The memory block is delivered inside the last user message, fenced, after that message's own text.", "passes": true },
+    { "id": 13, "description": "A memory whose text is an instruction reaches no system message and causes no tool call.", "passes": true },
+    { "id": 14, "description": "Memory content cannot forge or close the fence: the markers and control characters inside a memory are shown escaped.", "passes": true },
+    { "id": 15, "description": "A turn that carries memory stores exactly the messages the run produced: none twice, none dropped.", "passes": true },
+    { "id": 16, "description": "ephemeral_prompt_prefix still returns the same count with memory present as without it, on both transcript shapes.", "passes": true },
+    { "id": 17, "description": "Existing memories keep being read: nothing is deleted, migrated or rewritten by this change.", "passes": true },
+    { "id": 18, "description": "_invoke, _resolve_confirmation, _confirmation_question and _has_denial are byte-identical to their reviewed form, and upstream's TestAgentConfirmation is unmodified and green.", "passes": true },
+    { "id": 19, "description": "No text this change puts in front of the model or a person names the platform, a vendor or a model.", "passes": true }
+  ]
+}

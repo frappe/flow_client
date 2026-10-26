@@ -1,0 +1,33 @@
+name: approve_executes_the_write
+description: A write pauses for approval, and the exact "Approve" executes it.
+user_message: pay alice 500
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent 500 to alice
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+model_script:
+  - tool_calls:
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+  after:
+    approve:
+      answers: {c1: Approve}
+      executed: [send_money]
+      output: the payment is sent
+      model_script:
+        - content: the payment is sent
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

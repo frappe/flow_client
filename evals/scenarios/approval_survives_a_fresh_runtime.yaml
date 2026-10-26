@@ -1,0 +1,52 @@
+name: approval_survives_a_fresh_runtime
+description: A pause answered by a runtime that did not create it still needs the exact Approve, and still works.
+user_message: pay alice
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+model_script:
+  - tool_calls:
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+  after:
+    # Every answer case here is replayed on a FRESH runtime built from the scenario, never the one
+    # that paused — which is what a client reloading a conversation produces. The approval must
+    # survive that, and only the exact "Approve" may survive it.
+    approved_on_a_new_runtime:
+      answers: {c1: Approve}
+      executed: [send_money]
+      tool_results:
+        c1: {equals: sent}
+      model_script:
+        - content: paid
+      output: paid
+    denied_on_a_new_runtime:
+      answers: {c1: Deny}
+      executed: []
+      tool_results:
+        c1: {contains: [denied]}
+      output: null
+      paused: false
+    lowercase_approve_on_a_new_runtime:
+      answers: {c1: approve}
+      executed: []
+      tool_results:
+        c1: {contains: [redirect]}
+      model_script:
+        - content: I need an exact approval.
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

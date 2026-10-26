@@ -1,0 +1,32 @@
+name: auto_approve_turns_every_gate_off
+description: "A run with nobody in it refuses a gated write. It does not run, it does not pause, and the model is told it needs a person."
+user_message: pay alice 500
+agent:
+  instructions: Be terse. Use the tools you are given.
+  auto_approve: true
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent 500 to alice
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+model_script:
+  - tool_calls:
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+  - content: the payment is sent
+expect:
+  # S19 Part B. There is nobody to ask, so the write is refused rather than run or parked. The
+  # refusal is a result, not a pause, so the run completes — which is what keeps such a run from
+  # stalling on a tool it cannot be asked about.
+  pauses: false
+  tool_calls: []
+  tool_results:
+    c1:
+      contains: ["not_executed", "unattended"]
+      absent: ["sent 500 to alice"]
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

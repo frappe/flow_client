@@ -1,0 +1,24 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s18-knowledge-read-filter.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-21 (unattended run 8).",
+  "_amended": "2026-09-21 (unattended run 9), on the owner's explicit Task A instruction, which is the ONLY authority for these three edits and which overrides the rule in _comment and CLAUDE.md workflow rule 4 for them alone. (a) Feature 10's description: '/app/' -> '/desk/', forced by the owner's desk-path decision in the same instruction — without it the entry would describe a path the code no longer builds. (b) Feature 16 ADDED with 'passes': false, per 'Mark the System Manager path (read builtin, list view, /api/resource on Flow Knowledge Chunk) as an open item, not passing.' (c) Feature 17 ADDED with 'passes': true, the contract of the M1 fix in the same instruction, which had no entry at all. An added entry can only tighten this contract, never loosen it. No other entry's wording or 'passes' was touched. Flagged in the run 9 FINAL REPORT as a conscious, owner-directed departure.",
+  "spec": "s18-knowledge-read-filter",
+  "features": [
+    { "id": 1, "description": "A user who may not read the source record gets zero hits, and no excerpt, title, source, score or reference for it appears anywhere in the returned structure.", "passes": true },
+    { "id": 2, "description": "Control: the same query as a user who may read the record returns it, so feature 1 cannot pass by returning nothing to anybody.", "passes": true },
+    { "id": 3, "description": "A chunk with no reference_doctype/reference_name is returned exactly as before, to a user with no extra roles.", "passes": true },
+    { "id": 4, "description": "Over-fetch: with unreadable records ranking above readable ones, the asking user still gets up to limit readable hits.", "passes": true },
+    { "id": 5, "description": "A dropped hit produces no message and no raise: frappe.local.message_log is empty after a search over a fully-unreadable set, and the call returns an empty list.", "passes": true },
+    { "id": 6, "description": "The serialized tool result handed to the model contains no substring of the unreadable record.", "passes": true },
+    { "id": 7, "description": "The candidate ceiling holds: the store is asked for no more than CANDIDATE_CEILING, and with more unreadable candidates than the ceiling the search ends and returns what it has.", "passes": true },
+    { "id": 8, "description": "The search_knowledge builtin goes through the filtered path: the same user gets nothing through the tool either.", "passes": true },
+    { "id": 9, "description": "Every hit from a DocType source carries a non-empty title equal to the source record's own title field.", "passes": true },
+    { "id": 10, "description": "Every hit from a DocType source carries url == /desk/<doctype-slug>/<name>, relative, with the name quoted, built from the single DESK_PATH constant.", "passes": true },
+    { "id": 11, "description": "A hit from a Text source carries the knowledge source row's title and a url of None, and does not raise.", "passes": true },
+    { "id": 12, "description": "An unreadable hit contributes no title: the titles are built after the permission check, and no title of a dropped record is fetched or returned.", "passes": true },
+    { "id": 13, "description": "No returned field contains the site host or any platform, vendor or model name, proved with a positive control.", "passes": true },
+    { "id": 14, "description": "The two existing retrieval gates are unchanged: an empty knowledge-base scope still throws, and a disabled knowledge base is still skipped.", "passes": true },
+    { "id": 15, "description": "flow/tests/test_knowledge.py is unmodified and green, and _invoke, _resolve_confirmation, _confirmation_question and _has_denial are unchanged with TestAgentConfirmation green.", "passes": true },
+    { "id": 16, "description": "OPEN, NOT CLOSED BY S18: Flow Knowledge Chunk is readable around this filter. The doctype grants {read, report} to System Manager and flow/hooks.py registers no permission_query_conditions for it, so the generic read builtin (frappe.get_list, which does not run controller has_permission hooks), the desk list view and /api/resource all return an unreadable record's indexed content by name. Its own spec; feature 1 holds for retrieve() and search_knowledge only.", "passes": false },
+    { "id": 17, "description": "A permission check that CANNOT ANSWER (a database fault, a broken hook) still drops the hit and still says nothing to the asker, but is written exactly once per retrieve() call to the Error Log, with no content, title, excerpt or record name in the row. An ordinary refusal, and a record deleted before the sweep, write nothing.", "passes": true }
+  ]
+}

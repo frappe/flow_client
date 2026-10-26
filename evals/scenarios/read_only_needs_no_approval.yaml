@@ -1,0 +1,24 @@
+name: read_only_needs_no_approval
+description: A read-only tool runs straight through and the run never pauses.
+user_message: what is the weather in Pune?
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: get_weather
+    description: Look up the weather for a city.
+    requires_confirmation: false
+    result: sunny, 31C
+    parameters:
+      type: object
+      properties:
+        city: {type: string}
+      required: [city]
+model_script:
+  - tool_calls:
+      - {id: c1, name: get_weather, arguments: {city: Pune}}
+  - content: It is sunny and 31C in Pune.
+expect:
+  pauses: false
+  tool_calls:
+    - {name: get_weather, arguments: {city: Pune}}
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

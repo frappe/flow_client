@@ -1,0 +1,15 @@
+{
+  "_comment": "S20. One entry per acceptance test. Only `passes` may be flipped; never reword an entry.",
+  "spec": "brain/10-specs/s20-code-with-no-voice-is-gated.md",
+  "features": [
+    { "id": 1, "description": "A Flow Tool row importing a bare module-level callable resolves gated, even with requires_confirmation unticked on the record.", "passes": true },
+    { "id": 2, "description": "A row inserted while the import flag is set gets no doctype default (measured, not cited) and resolves gated anyway.", "passes": true },
+    { "id": 3, "description": "An imported Tool object's own declaration still decides, in both directions: ungated stays ungated, gated cannot be un-gated by the record.", "passes": true },
+    { "id": 4, "description": "A shipped read-only builtin row resolves ungated.", "passes": true },
+    { "id": 5, "description": "The record can still turn a gate ON, including over code that declares it does not need one.", "passes": true },
+    { "id": 6, "description": "An import_path resolving to neither a Tool nor a callable is still refused.", "passes": true },
+    { "id": 7, "description": "The approval question built for such a tool names no platform, vendor or model, and the check that says so can itself go red.", "passes": true },
+    { "id": 8, "description": "A Script tool inserted as a fixture resolves gated, so arbitrary sandboxed code cannot run with nobody asked.", "passes": true },
+    { "id": 9, "description": "A Script tool created at a desk is gated too: the default and the floor agree.", "passes": true }
+  ]
+}

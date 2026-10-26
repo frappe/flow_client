@@ -1,0 +1,20 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/e5-confirm-prompt-field-v2.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-19 (unattended run 2).",
+  "spec": "e5-confirm-prompt-field-v2",
+  "features": [
+    { "id": 1, "description": "A sentence with {argument_name} placeholders is filled in from the call's arguments and shown above them.", "passes": true },
+    { "id": 2, "description": "Substitution is one regex over {[a-z_][a-z0-9_]{0,63}} and nothing else: no expression, filter, attribute access, index, loop or conditional is evaluated, and each is shown as literal text instead.", "passes": true },
+    { "id": 3, "description": "No jinja, str.format, render_template or safe_eval is reachable from this path, proved by a grep whose identical form hits run 1's code.", "passes": true },
+    { "id": 4, "description": "A database call written into the field stays literal text; rendering reads nothing beyond the template and the arguments, proved with database access patched to raise.", "passes": true },
+    { "id": 5, "description": "Every substituted value is wrapped in quotes and shown verbatim, with control and format characters (Cc, Cf, bidi overrides included) escaped rather than interpreted.", "passes": true },
+    { "id": 6, "description": "A value cannot open a line of its own and forge a second question.", "passes": true },
+    { "id": 7, "description": "A value cannot close the quotes that hold it, and a literal backslash is distinguishable from a real control character.", "passes": true },
+    { "id": 8, "description": "Nothing is ever silently truncated: a value over 200 characters, a missing argument, or a non-scalar argument abandons the whole sentence and falls back to the JSON dump.", "passes": true },
+    { "id": 9, "description": "A padded value cannot hide the rest of the author's sentence.", "passes": true },
+    { "id": 10, "description": "The exact arguments that will execute are shown beneath the sentence in every case, so a sentence that misdescribes the tool still shows the truth.", "passes": true },
+    { "id": 11, "description": "Rendering never raises, and a sentence that cannot be produced never stops the person being asked.", "passes": true },
+    { "id": 12, "description": "The first line uses the tool's human title when there is one and the slug when there is not, and a title cannot open a line of its own.", "passes": true },
+    { "id": 13, "description": "The code attribute confirm_prompt still wins when present, and upstream's TestAgentConfirmation stays green and unmodified.", "passes": true },
+    { "id": 14, "description": "Options are exactly [Approve, Deny], allow_other is unchanged, and only the exact answer Approve executes a tool with a sentence on it.", "passes": true }
+  ]
+}

@@ -1,0 +1,50 @@
+name: keeping_a_note_is_approved_first
+description: The tool the engine ships for keeping notes asks before it keeps one, and the question shows the exact wording.
+user_message: remember that I prefer metric units
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  # `builtin` takes this tool's SHIPPED surface — its confirmation flag and its approval question —
+  # from the engine's own registry. The body is still a recording stub, so nothing is written. A
+  # scenario with an invented tool could never see a registry change; this one goes red the day
+  # the gate comes off, which is the whole point of writing it.
+  - name: update_memory
+    builtin: update_memory
+    result: kept
+model_script:
+  - tool_calls:
+      - id: m1
+        name: update_memory
+        arguments:
+          content: Prefers metric units.
+          scope: user
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+    contains:
+      # The exact wording that would be kept, and what will happen to it.
+      - Prefers metric units.
+      - later turns
+    absent:
+      # A note kept from a conversation is never shared with other people, so the question must
+      # not offer that reading.
+      - everyone
+  after:
+    approve:
+      answers: {m1: Approve}
+      executed: [update_memory]
+      model_script:
+        - content: noted
+    deny:
+      answers: {m1: Deny}
+      executed: []
+      model_script: []
+    free_text:
+      answers: {m1: say it differently}
+      executed: []
+      model_script:
+        - content: how about this instead
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

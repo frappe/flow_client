@@ -58,7 +58,10 @@ def resume_run(
 			title=_("Cannot Resume"),
 		)
 
-	out = load_session(run.session).resume(parsed_answers, stream=stream)
+	# `run.name`, and not only `run.session`: everything above authorised THIS run — the owner
+	# check and the `Paused` check — and without carrying the name down, the session resolves the
+	# run to act on for itself and the two can be different rows.
+	out = load_session(run.session).resume(parsed_answers, stream=stream, run_name=run.name)
 	return _sse_response(out) if stream else _summarize(out)
 
 
@@ -107,8 +110,9 @@ FEEDBACK_COMMENT_LIMIT = 500
 @frappe.whitelist()
 def submit_feedback(run_name: str, rating: str, comment: str | None = None) -> dict[str, Any]:
 	"""Record thumbs feedback on a finished run, or clear it with rating "None". A
-	thumbs-down comment is stored as shared agent memory when the agent has memory
-	enabled (a no-op otherwise). Clearing the rating leaves any saved memory intact."""
+	thumbs-down comment is stored as a personal note for the person who gave it, when the
+	agent has memory enabled (a no-op otherwise). Clearing the rating leaves any saved note
+	intact."""
 	from flow.lib.session import assert_run_owner
 	from flow.memory.memory import save_feedback_memory
 
@@ -158,9 +162,41 @@ def get_agent_tools(agent: str) -> dict[str, bool]:
 	if not tool_names:
 		return {}
 	rows = frappe.get_all(
-		"Flow Tool", filters={"name": ["in", tool_names]}, fields=["slug", "requires_confirmation"]
+		"Flow Tool",
+		filters={"name": ["in", tool_names]},
+		fields=["name", "slug", "requires_confirmation"],
 	)
-	return {row.slug: bool(row.requires_confirmation) for row in rows}
+	# What the RUNTIME would build, not what the row says. A record may turn an approval on and
+	# may never take one off, so a row already saying yes needs no resolving; a row saying no is
+	# only half the answer, because code with no voice of its own — a bare callable behind an
+	# import path, a Script tool — is gated by the code floor in `flow/lib/resolver.py` whatever
+	# the row says. Reading the row alone told the panel a gated tool was ungated, and the panel
+	# is what decides whether a refusal or a denial is shown as one.
+	tools: dict[str, bool] = {}
+	for row in rows:
+		if row.requires_confirmation:
+			tools[row.slug] = True
+			continue
+		# `frappe.throw` writes to the message log BEFORE it raises, and catching the exception
+		# does not undo that — the framework still serialises the log into the response. The
+		# resolver's failure message carries the tool's dotted import path and the underlying
+		# import error verbatim, so without this snapshot a panel refresh handed both to anyone
+		# who can read the agent. Restored rather than emptied, so a message something else put
+		# there survives.
+		log = list(getattr(frappe.local, "message_log", None) or [])
+		try:
+			tools[row.slug] = bool(frappe.get_doc("Flow Tool", row.name).to_tool().requires_confirmation)
+		except Exception:
+			# A row the runtime cannot build is a row nothing will run ungated. Say gated rather
+			# than say nothing, and keep answering for the agent's other tools: mislabelling an
+			# approval is the one thing this call exists to avoid.
+			tools[row.slug] = True
+		finally:
+			# `finally`, not `except`: a resolve that SUCCEEDS can talk too — module-level code in
+			# an imported tool, a warning from the resolver — and everything in this log is
+			# serialised onto the response of a call whose whole answer is one boolean per tool.
+			frappe.local.message_log = log
+	return tools
 
 
 @frappe.whitelist()

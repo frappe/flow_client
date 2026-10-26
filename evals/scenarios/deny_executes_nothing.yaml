@@ -1,0 +1,33 @@
+name: deny_executes_nothing
+description: A denial halts the run, executes nothing, and does not consult the model again.
+user_message: delete every invoice
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: delete_records
+    description: Delete a folder of records.
+    requires_confirmation: true
+    result: deleted
+    parameters:
+      type: object
+      properties:
+        folder: {type: string}
+      required: [folder]
+model_script:
+  - tool_calls:
+      - {id: c1, name: delete_records, arguments: {folder: invoices}}
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+  after:
+    deny:
+      # No model_script at all: if the run consulted the model again, the scripted model
+      # would raise, so this is the assertion that no further turn happened.
+      answers: {c1: Deny}
+      executed: []
+      output: null
+      paused: false
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

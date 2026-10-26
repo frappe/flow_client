@@ -2,6 +2,7 @@
 import { ref, computed } from "vue";
 import ArgValue from "./ArgValue.vue";
 import { formatScalar, recordLabelKey, isBlockText } from "@/lib/toolMeta";
+import { displayText } from "@/lib/display";
 import { __ } from "@/lib/translate";
 
 // Records laid flat: numbered, title first, every field visible right away.
@@ -49,9 +50,12 @@ const rows = computed(() => {
 			if (Object.prototype.hasOwnProperty.call(item, k)) rest[k] = item[k];
 		}
 		const key = labelKey.value;
+		// `recordLabelKey` picks the key from the FIRST record, so a later record's value at that key
+		// is unconstrained — it can be multi-line, 50 000 characters, or a bidi override. It is a
+		// model-chosen value reaching the DOM through `String()`, and goes through the one rule.
 		const title =
 			key && item[key] != null && item[key] !== ""
-				? String(item[key])
+				? displayText(String(item[key]))
 				: __("Record {0}", [i + 1]);
 		return { title, rest: Object.keys(rest).length ? rest : null };
 	});

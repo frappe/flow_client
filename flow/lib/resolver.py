@@ -53,9 +53,20 @@ def _resolve_module(doc: FlowTool) -> Tool:
 		)
 
 	if isinstance(obj, Tool):
-		return _build_tool(doc, obj.parameters, obj.func, confirm_prompt=obj.confirm_prompt)
+		return _build_tool(
+			doc,
+			obj.parameters,
+			obj.func,
+			confirm_prompt=obj.confirm_prompt,
+			code_requires_confirmation=obj.requires_confirmation,
+		)
 	if callable(obj):
-		return _build_tool(doc, build_schema(obj), obj)
+		# A plain function says nothing about approval, and "nothing" is not "no". The record may
+		# turn a gate ON; it cannot take one off that was never declared. `frappe.get_attr` will
+		# import any dotted path a System Manager can type — there is no allowlist — so this
+		# branch is the widest surface in the registry and the only one where the code has no
+		# voice at all.
+		return _build_tool(doc, build_schema(obj), obj, code_requires_confirmation=True)
 	frappe.throw(
 		_("Import path {0} is not a Tool or callable.").format(doc.import_path),
 		title=_("Invalid Tool"),
@@ -64,17 +75,46 @@ def _resolve_module(doc: FlowTool) -> Tool:
 
 def _resolve_script(doc: FlowTool, *, restrict_commit_rollback: bool = False) -> Tool:
 	runner = _make_script_runner(doc.code, doc.slug, restrict_commit_rollback=restrict_commit_rollback)
-	return _build_tool(doc, schema_from_code(doc.code), runner)
+	# A Script tool is arbitrary code in a sandbox that a RECORD carries, and it declares nothing
+	# about itself at all. The doctype default gates one created at a desk; a row inserted during
+	# an import never sees a default — `_set_defaults` returns early while the import flag is set —
+	# and that is the row nobody reviews as a tool definition. Measured, not assumed: see
+	# `test_a_script_tool_imported_as_a_fixture_is_still_gated`.
+	return _build_tool(doc, schema_from_code(doc.code), runner, code_requires_confirmation=True)
 
 
-def _build_tool(doc: FlowTool, parameters: dict[str, Any], func: Any, *, confirm_prompt: Any = None) -> Tool:
+def _build_tool(
+	doc: FlowTool,
+	parameters: dict[str, Any],
+	func: Any,
+	*,
+	confirm_prompt: Any = None,
+	# The default is the safe answer, not the convenient one. Every branch that builds a runnable
+	# tool has to say what the CODE declares about approval, and "nothing" is not "no" — a branch
+	# written later that forgets to say builds a tool that ASKS, instead of quietly re-creating
+	# the hole D1 and D2 close. Nothing in the engine relies on this default: all three call sites
+	# below pass the argument.
+	code_requires_confirmation: bool = True,
+) -> Tool:
 	return Tool(
 		name=doc.slug,
 		description=doc.description,
 		parameters=parameters,
 		func=func,
-		requires_confirmation=bool(doc.requires_confirmation),
+		# A record may turn an approval ON. It may not take one OFF that the imported function
+		# declares for itself. The record decides which tools an agent has and what they are
+		# called; it does not get to decide that the function behind it stopped changing data.
+		#
+		# Without this, a second record importing the same function under a different name ran it
+		# ungated — and nothing repaired that one, because the sync only ever visits records named
+		# for a builtin. The two records ran the identical function object; only the name differed.
+		requires_confirmation=bool(doc.requires_confirmation) or bool(code_requires_confirmation),
 		confirm_prompt=confirm_prompt,
+		title=doc.title,
+		# .get, not attribute access: on a site running this code before its migration the field
+		# does not exist yet, and a Document raises rather than answering None — which would take
+		# out every tool, not just the ones with a question written on them.
+		confirm_template=doc.get("confirm_template"),
 	)
 
 

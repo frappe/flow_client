@@ -110,9 +110,17 @@ class FlowRun(Document):
 			session.append_run_messages(new_messages, run=self.name)
 
 	def mark_failed(self, error: str) -> None:
-		"""Mark a run as failed with the given error message."""
+		"""Mark a run as failed with the given error message. The questions go with it.
+
+		Only a Paused run can be resumed, so a question still on a failed one is a question nobody
+		can ever answer — and it is what a person is shown as pending. `apply_result` already clears
+		them whenever a run comes back not-paused; this is the same rule on the paths that never
+		reach it: a run that raised, a stream cut short, and a person stopping a paused run
+		deliberately.
+		"""
 		self.status = "Failed"
 		self.error = str(error)[:5000]
+		self.questions = None
 		self.save(ignore_permissions=True)
 
 
@@ -204,8 +212,11 @@ def stream_with_persistence(
 			frappe.db.commit()
 		yield Error(message=str(e))
 	finally:
-		# The run's tools have finished; drop the source_run flag set for update_memory.
+		# The run's tools have finished; drop the flags set for update_memory. Both, together:
+		# leaving `flow_unattended` set would carry a trigger's "nobody is here" into the next
+		# request this worker serves, and silently stop that person's notes being kept.
 		frappe.flags.flow_run = None
+		frappe.flags.flow_unattended = False
 		# Stream cut short (e.g. client disconnect raises GeneratorExit) before
 		# we persisted — record the run as failed so it doesn't sit in "Running".
 		if not persisted:
@@ -224,9 +235,15 @@ def _status_from_result(result: RunResult) -> str:
 
 
 def _new_messages_for_session(session: str, full_transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
-	"""Return new messages produced by this run, excluding the session's prior history."""
+	"""Return new messages produced by this run, excluding the session's prior history and any
+	per-turn messages the prompt carried but the session never stored."""
+	# Local import to match this module's own convention for cross-controller calls (see the
+	# same pattern in `stream_with_persistence`); there is no import cycle to avoid here.
+	from flow.flow.doctype.flow_session.flow_session import ephemeral_prompt_prefix
+
 	existing = frappe.db.count("Flow Session Message", {"parent": session})
-	return list(full_transcript[existing:])
+	prefix = ephemeral_prompt_prefix(session, full_transcript)
+	return list(full_transcript[existing + prefix :])
 
 
 def _dump_json(value: Any) -> str | None:

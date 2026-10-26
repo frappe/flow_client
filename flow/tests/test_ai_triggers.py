@@ -390,14 +390,20 @@ class TestFire(IntegrationTestCase):
 
 		self.assertEqual(frappe.get_doc("Flow Run", run_name).status, "Completed")
 
-	def test_fire_pauses_on_confirmation_tool_without_auto_approve(self):
-		# Default trigger (auto_approve off): a confirmation tool still pauses for approval.
+	def test_fire_refuses_a_confirmation_tool_without_auto_approve(self):
+		# Default trigger (auto_approve off): nobody is there to approve either, so a
+		# confirmation tool is refused and the run finishes instead of parking in Paused
+		# waiting for an answer that can never come.
+		import json
+
 		todo = frappe.get_doc({"doctype": "ToDo", "description": "needs approval"}).insert()
 
 		with patch.object(Model, "chat", side_effect=self._execute_then_final()):
 			run_name = fire(self.trigger.name, target_doctype="ToDo", target_name=todo.name)
 
-		self.assertEqual(frappe.get_doc("Flow Run", run_name).status, "Paused")
+		run = frappe.get_doc("Flow Run", run_name)
+		self.assertEqual(run.status, "Completed")
+		self.assertEqual(json.loads(run.tool_calls or "[]"), [])  # the tool never ran
 
 	def test_fire_skips_disabled_trigger(self):
 		self.trigger.enabled = 0

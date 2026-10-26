@@ -1,0 +1,18 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s15-resume-fails-closed.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-20 (unattended run 5).",
+  "spec": "s15-resume-fails-closed",
+  "features": [
+    { "id": 1, "description": "A resume whose pending call names a tool absent from the runtime executes nothing and does not write the person's answer as the tool result.", "passes": true },
+    { "id": 2, "description": "That call's tool result is the fixed unavailable record, on its own tool_call_id.", "passes": true },
+    { "id": 3, "description": "Deny and free text on a missing tool also execute nothing and also get the fixed unavailable record, never the answer.", "passes": true },
+    { "id": 4, "description": "A pending call whose tool is present but no longer requires_confirmation does not execute and gets the fixed approval_no_longer_applies record.", "passes": true },
+    { "id": 5, "description": "A pending call that was not an approval question, whose tool is present and ungated, resolves byte-identically to today.", "passes": true },
+    { "id": 6, "description": "Single-question approve, deny and free-text behaviour on a present gated tool is byte-identical to today.", "passes": true },
+    { "id": 7, "description": "S14 still holds: a Deny withholds every Approve in the group, and a group mixing a missing tool with a gated one executes nothing.", "passes": true },
+    { "id": 8, "description": "The streaming resume behaves identically and emits the same ToolEnded events for the not-executed calls.", "passes": true },
+    { "id": 9, "description": "It holds through the public resume_run path on a record-backed session whose linked agent lost the tool between pause and resume.", "passes": true },
+    { "id": 10, "description": "No tool message written by the not-executed rows equals or contains the person's answer string.", "passes": true },
+    { "id": 11, "description": "With no asked-questions record available, the missing-tool and gated rows still hold and the ordinary row is unchanged.", "passes": true },
+    { "id": 12, "description": "_invoke, _resolve_confirmation, _confirmation_question and _has_denial are byte-identical to their reviewed form, and upstream's TestAgentConfirmation is unmodified and green.", "passes": true }
+  ]
+}

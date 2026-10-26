@@ -9,6 +9,7 @@
 .flow-run .instructions { white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow: auto; font-size: 13px; line-height: 1.5; }
 .flow-run table.calls { width: 100%; margin: 0; font-size: 12px; }
 .flow-run .empty { color: var(--text-muted); }
+.flow-run .question { white-space: pre-wrap; word-break: break-word; }
 </style>
 {% var esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v)); %}
 {% var nf = (n) => Number(n || 0).toLocaleString(); %}
@@ -56,7 +57,7 @@
 <h6>{{ __("Pending Questions") }}</h6>
 <ul style="margin: 0; padding-left: 18px;">
 {% for q in questions %}
-	<li style="margin-bottom: 8px;"><div>{{ esc(q.prompt) }}</div>{% if q.options && q.options.length %}<div class="text-muted" style="margin-top: 2px;">{{ q.multi_select ? __("Select any") : __("Select one") }}: {{ q.options.map(o => esc(o)).join(", ") }}</div>{% endif %}</li>
+	<li style="margin-bottom: 8px;"><div class="question">{{ esc(q.prompt) }}</div>{% if q.options && q.options.length %}<div class="text-muted" style="margin-top: 2px;">{{ q.multi_select ? __("Select any") : __("Select one") }}: {{ q.options.map(o => esc(o)).join(", ") }}</div>{% endif %}</li>
 {% endfor %}
 </ul>
 {% endif %}

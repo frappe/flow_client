@@ -1,0 +1,54 @@
+name: deny_stops_the_batch
+description: Two questions in one pause; a Deny beside an Approve executes neither (S14).
+user_message: pay alice and clear the invoices
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+  - name: delete_records
+    description: Delete a folder of records.
+    requires_confirmation: true
+    result: deleted
+    parameters:
+      type: object
+      properties:
+        folder: {type: string}
+      required: [folder]
+model_script:
+  - tool_calls:
+      - {id: k1, name: send_money, arguments: {to: alice, amount: 500}}
+      - {id: k2, name: delete_records, arguments: {folder: invoices}}
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 2
+    options: [Approve, Deny]
+  after:
+    approve_and_deny:
+      # The whole point: k1 was approved and must still not run.
+      answers: {k1: Approve, k2: Deny}
+      executed: []
+      output: null
+      paused: false
+    deny_and_approve:
+      answers: {k1: Deny, k2: Approve}
+      executed: []
+      output: null
+      paused: false
+    both_approved:
+      answers: {k1: Approve, k2: Approve}
+      executed: [send_money, delete_records]
+      output: both done
+      model_script:
+        - content: both done
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

@@ -1,0 +1,47 @@
+name: an_approved_execute_shows_its_code
+description: The code-running tool's approval question shows the code in full, because the code is what is being approved.
+user_message: clear out last month's drafts
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  # The shipped tool, with its real confirmation flag and its real approval question. Its sandbox
+  # holds the raw write tools, so nothing inside it is asked about again — which makes the question
+  # below the ONLY place a person sees what will happen. That is the property this scenario pins.
+  - name: execute
+    builtin: execute
+    result: "3 records deleted"
+model_script:
+  - tool_calls:
+      - id: e1
+        name: execute
+        arguments:
+          description: Delete last month's draft invoices
+          code: |
+            names = frappe.get_list("Sales Invoice", filters={"status": "Draft"}, pluck="name")
+            result = delete("Sales Invoice", names)
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+    contains:
+      # Every line of it, not a summary of it. A person approving code is approving THIS code.
+      - Delete last month's draft invoices
+      - 'delete("Sales Invoice", names)'
+      - 'frappe.get_list'
+  after:
+    approve:
+      answers: {e1: Approve}
+      executed: [execute]
+      model_script:
+        - content: the drafts are gone
+    deny:
+      answers: {e1: Deny}
+      executed: []
+      model_script: []
+  # `frappe` appears in the CODE the person is approving, which is theirs to read, so this scenario
+  # cannot use the usual absent_text list. The platform-name rule is about text the engine writes,
+  # not about a value a caller passed, and `test_s16_memory_hardening` and the E5 suite both assert
+  # the engine's own strings separately.
+  absent_text: [openai, anthropic, gpt-, claude]

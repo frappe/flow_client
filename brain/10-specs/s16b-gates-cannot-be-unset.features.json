@@ -1,0 +1,19 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s16b-gates-cannot-be-unset.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-20 (unattended run 6).",
+  "spec": "s16b-gates-cannot-be-unset",
+  "features": [
+    { "id": 1, "description": "Every tool in BUILTIN_TOOLS is classified as write-capable or read-only, and adding one to neither turns the suite red.", "passes": true },
+    { "id": 2, "description": "Every write-capable builtin ships with requires_confirmation set in code.", "passes": true },
+    { "id": 3, "description": "Every write-capable builtin's Flow Tool row requires confirmation after the sync a migrate runs.", "passes": true },
+    { "id": 4, "description": "The runtime tool resolved from each of those rows requires confirmation.", "passes": true },
+    { "id": 5, "description": "Saving one of those rows with the gate unchecked is refused with a message naming the tool.", "passes": true },
+    { "id": 6, "description": "The refusal holds on insert as well as on save, and for a caller passing ignore_permissions.", "passes": true },
+    { "id": 7, "description": "A read-only builtin's row can still be saved ungated, so the refusal is not refusing everything.", "passes": true },
+    { "id": 8, "description": "A row whose gate was turned off before this fix is restored by sync_builtin_tools.", "passes": true },
+    { "id": 9, "description": "A new Script tool is created with requires_confirmation set.", "passes": true },
+    { "id": 10, "description": "An author who deliberately unchecks the gate on their own Script tool still can.", "passes": true },
+    { "id": 11, "description": "The registry test fails when a write-capable builtin's row is unchecked, demonstrated in-process and rolled back.", "passes": true },
+    { "id": 12, "description": "The registry test cannot pass vacuously: a control proves the registry is not empty and another proves the flag is not True for every tool.", "passes": true },
+    { "id": 13, "description": "No text this change puts in front of a model or a person names the platform, a vendor or a model.", "passes": true }
+  ]
+}

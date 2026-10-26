@@ -1,0 +1,15 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/e2-instructions-per-turn.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-19.",
+  "spec": "e2-instructions-per-turn",
+  "features": [
+    { "id": 1, "description": "Edit a linked agent's instructions between two turns: the second turn's system message contains the new text.", "passes": true },
+    { "id": 2, "description": "After that second turn, the stored first message is byte-identical to what it was.", "passes": true },
+    { "id": 3, "description": "The second turn's system message does not contain the superseded instructions.", "passes": true },
+    { "id": 4, "description": "A session with no agent link is unaffected: its system message is still the stored row's content.", "passes": true },
+    { "id": 5, "description": "Resume uses the current instructions too.", "passes": true },
+    { "id": 6, "description": "The per-turn context block and the memory block still appear, after the instructions, in that order.", "passes": true },
+    { "id": 7, "description": "A linked session whose transcript has no stored system row still gets one carrying the current instructions, and that turn persists no extra row.", "passes": true },
+    { "id": 8, "description": "The number of stored rows after a turn is unchanged from today's behaviour.", "passes": true },
+    { "id": 9, "description": "Upstream's existing test suite stays green unmodified, including TestAgentConfirmation.", "passes": true }
+  ]
+}

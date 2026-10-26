@@ -13,10 +13,15 @@ import { humanize, argKind, formatScalar } from "@/lib/toolMeta";
 const props = defineProps({
 	value: { type: Object, required: true },
 	blockKeys: { type: Object, default: () => new Set() },
+	// The tool's declaration that these arguments ARE code. Raw, multi-line rendering follows from
+	// this and from nothing else — see `CodeBlock.vue`. Deliberately NOT forwarded to the nested
+	// `ArgValue` below: a key called `code` inside an object argument is not `execute`'s `code`.
+	codeKeys: { type: Object, default: () => new Set() },
 });
 
 const kindFor = (k, v) => {
-	if (typeof v === "string" && v && props.blockKeys.has(k)) return "code";
+	if (typeof v === "string" && v && (props.blockKeys.has(k) || props.codeKeys.has(k)))
+		return "code";
 	return argKind(v);
 };
 
@@ -50,7 +55,7 @@ const tupleValues = (v) => (Array.isArray(v[1]) ? v[1] : [v[1]]).map(formatScala
 					>
 						{{ humanize(row.key) }}
 					</div>
-					<CodeBlock :code="String(row.value)" />
+					<CodeBlock :code="String(row.value)" :raw="codeKeys.has(row.key)" />
 				</div>
 				<template v-else>
 					<div
@@ -64,7 +69,11 @@ const tupleValues = (v) => (Array.isArray(v[1]) ? v[1] : [v[1]]).map(formatScala
 						:class="{ 'border-t border-outline-gray-1': i }"
 					>
 						<template v-if="row.kind === 'tuple'">
-							<span class="text-ink-gray-4">{{ row.value[0] }}</span>
+							<!-- The operator comes from a fixed set (`FILTER_OPERATORS`), so it cannot
+							     carry an escape today. It goes through the same rule anyway, which costs
+							     nothing — an ordinary operator is returned unchanged — and removes the
+							     argument that this cell is safe BECAUSE of a check somewhere else. -->
+							<span class="text-ink-gray-4">{{ formatScalar(row.value[0]) }}</span>
 							{{ tupleValues(row.value) }}
 						</template>
 						<template v-else-if="row.kind === 'empty'">—</template>

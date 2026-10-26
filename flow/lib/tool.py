@@ -30,6 +30,11 @@ class Tool:
 	func: Callable[..., Any]
 	requires_confirmation: bool = False
 	confirm_prompt: Callable[[dict[str, Any]], str] | None = None
+	# How the approval question reads. `title` names the tool the way a person would, in place of
+	# the slug. `confirm_template` states the request in plain language, filled in from the call's
+	# arguments. Both optional, both about wording only — neither changes what the tool does.
+	title: str | None = None
+	confirm_template: str | None = None
 
 	def __post_init__(self) -> None:
 		self._validated = validate_call(config=ConfigDict(arbitrary_types_allowed=True))(self.func)

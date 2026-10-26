@@ -1,0 +1,18 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s14-deny-stops-batch.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-20 (unattended run 4).",
+  "spec": "s14-deny-stops-batch",
+  "features": [
+    { "id": 1, "description": "Approve+Deny in one resume executes nothing: the approved tool is never called and the run halts.", "passes": true },
+    { "id": 2, "description": "Deny+Approve is the same; neither the answer map's order nor the transcript's call order changes it.", "passes": true },
+    { "id": 3, "description": "One Deny withholds every Approve in a batch of three or more.", "passes": true },
+    { "id": 4, "description": "A withheld call still gets a tool result on its own tool_call_id, carrying status not_executed and the person's own answer.", "passes": true },
+    { "id": 5, "description": "The denied call's own tool result is byte-identical to today's denied record.", "passes": true },
+    { "id": 6, "description": "After a mixed batch the run's terminal shape is what a Deny produces today: output None, iterations 0, no further model call.", "passes": true },
+    { "id": 7, "description": "Single-question behaviour is byte-identical for Approve, Deny and free text.", "passes": true },
+    { "id": 8, "description": "Approve-only behaviour is unchanged: two Approves execute both tools and the run continues.", "passes": true },
+    { "id": 9, "description": "Free-text-only behaviour is unchanged: Approve beside free text executes the approved one, redirects the other, and the run continues.", "passes": true },
+    { "id": 10, "description": "A pending call on a tool that does not require confirmation resolves exactly as today, even in a denied batch.", "passes": true },
+    { "id": 11, "description": "The streaming resume withholds identically and emits the same ToolEnded events and Done result.", "passes": true },
+    { "id": 12, "description": "_invoke, _resolve_confirmation, _confirmation_question and _has_denial are byte-identical to veyqon, and upstream's TestAgentConfirmation is green and unmodified.", "passes": true }
+  ]
+}

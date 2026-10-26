@@ -101,6 +101,22 @@ def _memory_call(content: str = "Widget A maps to WGT-001.", call_id: str = "m1"
 	)
 
 
+def _personal_memory_call(content: str = "Widget A maps to WGT-001.", call_id: str = "m1") -> ChatResponse:
+	"""A response that calls update_memory for a PERSONAL note, which pauses for approval.
+
+	`update_memory` requires confirmation, so a call from a conversation pauses the run instead of
+	writing inline, and `scope="user"` is the only scope a conversation may ask for.
+	"""
+	return ChatResponse(
+		content=None,
+		tool_calls=[
+			ToolCall(id=call_id, name="update_memory", arguments={"content": content, "scope": "user"})
+		],
+		finish_reason="tool_calls",
+		usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+	)
+
+
 class TestStartRun(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
@@ -141,6 +157,33 @@ class TestStartRun(IntegrationTestCase):
 		self.assertEqual(len(payload["questions"]), 1)
 		self.assertEqual(payload["questions"][0]["options"], ["Approve", "Deny"])
 		self.assertEqual(payload["questions"][0]["key"], "c1")
+
+	def test_a_paused_run_sends_the_engine_s_question_body_to_the_client(self):
+		"""REGRESSION GUARD for the escaping work, NOT a proof that the card shows it.
+
+		This test passes with or without the client change: S21 touches `ConfirmCard.vue`,
+		`store.js` and one stylesheet rule, and none of them is on this path. Calling it a proof of
+		S21 would be the exact failure the spec exists to avoid — a test whose only red-making
+		mutation is outside the change it is credited to.
+
+		What it IS for: the card now renders this string, so a later change to the engine that
+		stopped sending the body, or sent only its head, would silently empty the card again with
+		every other test still green. The body of a gated code call is the tool's own sentence
+		followed by the code itself, and both have to arrive.
+		"""
+		with patch.object(Model, "chat", return_value=_confirm_call()):
+			payload = start_run("count the open records", agent=self.agent.name)
+
+		prompt = payload["questions"][0]["prompt"]
+		head, blank, body = prompt.partition("\n\n")
+		self.assertTrue(head.startswith("Approve "), head)
+		self.assertEqual(blank, "\n\n", "the head and the body are no longer separated by a blank line")
+		self.assertIn("result = 1", body, "the code being authorised did not reach the client")
+		# The spec proposed blanking the `confirm_prompt` branch as this test's red-making mutation.
+		# I ran it: the assertion above stayed GREEN, because the fallback dumps the same arguments
+		# and `result = 1` is in the dump too. So the assertion that makes the mutation visible is
+		# this one — the body is the tool's own SENTENCE, not the argument shape.
+		self.assertNotIn('"code"', body, "the client got the argument dump instead of the tool's sentence")
 
 	def test_start_run_rejects_empty_input(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "Input"):
@@ -768,14 +811,35 @@ class TestSubmitFeedback(IntegrationTestCase):
 			submit_feedback(run, "Up")
 
 	def test_down_comment_saved_as_memory(self):
+		"""The subject is unchanged: a thumbs-down comment becomes a note stamped with the run.
+		What moved is who it belongs to. A thumbs-down is one person's opinion about one run, and it
+		used to become standing context that every user of the agent was then told, with nobody
+		asked. The scope assertion is replaced by a stronger pair: the note belongs to the person who
+		gave the feedback, and no shared note exists at all. The feedback is given by a named person
+		rather than the administrator, so "owned by whoever gave it" is measured and not assumed.
+
+		Which line does which: the scope and the owner carry the claim, and the last line adds only
+		the case where a shared note is written BESIDE the personal one. The person here is also the
+		run's owner, so this does not separate "owned by the giver" from "owned by the run's owner";
+		a third party with write permission on the run can also submit feedback, and for them only
+		the giver is correct. The write stamps the session user, so the behaviour is right — but this
+		test would pass either way, and saying so is cheaper than a test that needs a permission
+		grant to set up.
+		"""
+		person = _ensure_user("feedback-author@example.com")
+		frappe.set_user(person)
 		run = self._run()
 		result = submit_feedback(run, "Down", comment="Widget A maps to WGT-001.")
+
+		frappe.set_user("Administrator")
 		memory = frappe.get_doc("Flow Agent Memory", result["memory"])
 		self.assertEqual(memory.agent, self.agent.name)
-		self.assertEqual(memory.scope, "Agent")
+		self.assertEqual(memory.scope, "User")
+		self.assertEqual(memory.user, person)
 		self.assertEqual(memory.source, "Feedback")
 		self.assertEqual(memory.source_run, run)
 		self.assertEqual(memory.content, "Widget A maps to WGT-001.")
+		self.assertFalse(frappe.db.exists("Flow Agent Memory", {"agent": self.agent.name, "scope": "Agent"}))
 
 	def test_down_comment_without_memory_tool_records_but_skips_memory(self):
 		other = frappe.get_doc(_agent_doc(self.model.name, title="Feedback No Memory Agent")).insert()
@@ -828,14 +892,32 @@ class TestMemoryRunProvenance(IntegrationTestCase):
 		memory_store.drop_table()
 
 	def test_agent_memory_stamped_with_run_then_flag_cleared(self):
-		with patch.object(Model, "chat", side_effect=[_memory_call(), _final("done")]):
-			payload = start_run("remember the mapping", agent=self.agent.name)
+		"""The subject is unchanged: a note the agent writes carries the run that produced it, and
+		the run flag does not outlive the run. What moved is that keeping a note is now a write the
+		person is asked about first, and only a personal note may be kept from a conversation. So the
+		turn that proposes the note pauses and writes nothing, and the exact "Approve" performs the
+		write. Both halves are asserted here, and the flag is checked after each of them.
+		"""
+		person = frappe.session.user
+		with patch.object(Model, "chat", side_effect=[_personal_memory_call()]):
+			paused = start_run("remember the mapping", agent=self.agent.name)
 
-		self.assertEqual(payload["status"], "Completed")
+		# The proposing turn: it pauses, it writes nothing, and it leaves no flag behind.
+		self.assertEqual(paused["status"], "Paused")
+		self.assertFalse(frappe.db.exists("Flow Agent Memory", {"agent": self.agent.name}))
+		self.assertIsNone(frappe.flags.get("flow_run"))
+
+		with patch.object(Model, "chat", side_effect=[_final("done")]):
+			resumed = resume_run(paused["name"], {"m1": "Approve"})
+
+		self.assertEqual(resumed["status"], "Completed")
 		memory = frappe.get_doc("Flow Agent Memory", {"agent": self.agent.name})
+		self.assertEqual(memory.scope, "User")
+		self.assertEqual(memory.user, person)
 		self.assertEqual(memory.source, "Agent")
-		self.assertEqual(memory.source_run, payload["name"])
-		# The flag must not linger past the run that set it.
+		self.assertEqual(memory.source_run, paused["name"])
+		self.assertEqual(memory.content, "Widget A maps to WGT-001.")
+		# The flag must not linger past the run that set it, on the resume path either.
 		self.assertIsNone(frappe.flags.get("flow_run"))
 
 	def test_flag_cleared_when_run_fails(self):

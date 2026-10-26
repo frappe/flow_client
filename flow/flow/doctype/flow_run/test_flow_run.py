@@ -206,6 +206,25 @@ class TestFlowRunPersistence(IntegrationTestCase):
 		self.assertEqual(doc.status, "Failed")
 		self.assertEqual(doc.error, "something broke")
 
+	def test_mark_failed_drops_a_pending_question(self):
+		"""A question on a run that is not Paused is one nobody can answer: only a Paused run can be
+		resumed, and the desk's run view renders whatever is in this field as pending. Beside
+		`apply_result`, which has always cleared it whenever a run came back not-paused.
+
+		Here rather than only in a feature module, because this is the file that travels with the
+		controller — a change whose only gate lives elsewhere ships with no gate at all.
+		"""
+		session = _new_session(self.agent)
+		doc = persist_result(_paused_result(), source="Manual", input="email the list", session=session)
+		self.assertEqual(doc.status, "Paused")
+		self.assertTrue(doc.questions)
+
+		doc.mark_failed("the model timed out")
+
+		self.assertEqual(doc.status, "Failed")
+		self.assertFalse(doc.questions)
+		self.assertEqual(doc.error, "the model timed out")
+
 	def test_mark_failed_truncates_long_error(self):
 		session = _new_session(self.agent)
 		doc = create_run(source="Manual", input="hi", session=session)
@@ -264,3 +283,88 @@ class TestFlowRunValidation(IntegrationTestCase):
 		)
 		with self.assertRaisesRegex(frappe.ValidationError, "JSON"):
 			doc.insert(ignore_permissions=True)
+
+
+class TestRunTranscriptDelta(IntegrationTestCase):
+	"""What a run persists is the tail of the transcript it was given. The prompt may carry
+	messages the session never stored (the per-turn context block is one), so the split point
+	is the stored row count plus that ephemeral prefix — not the stored count alone."""
+
+	def setUp(self):
+		self.agent = _make_agent()
+
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def _session_with_rows(self, rows: list[dict]) -> str:
+		session = frappe.get_doc({"doctype": "Flow Session", "agent": self.agent, "title": "t"}).insert(
+			ignore_permissions=True
+		)
+		for row in rows:
+			session.append("messages", row)
+		session.save(ignore_permissions=True)
+		return session.name
+
+	def test_ephemeral_system_message_is_not_persisted_as_output(self):
+		session = self._session_with_rows([{"role": "user", "content": "hi"}])
+		run = create_run(source="Manual", input="hi", session=session)
+
+		run.apply_result(
+			RunResult(
+				output="hello",
+				messages=[
+					{"role": "system", "content": "EPHEMERAL CONTEXT"},
+					{"role": "user", "content": "hi"},
+					{"role": "assistant", "content": "hello"},
+				],
+				iterations=1,
+			)
+		)
+
+		rows = frappe.get_doc("Flow Session", session).messages
+		self.assertEqual([r.role for r in rows], ["user", "assistant"])
+		self.assertEqual([r.content for r in rows], ["hi", "hello"])
+
+	def test_stored_system_message_keeps_the_plain_offset(self):
+		session = self._session_with_rows(
+			[{"role": "system", "content": "be terse"}, {"role": "user", "content": "hi"}]
+		)
+		run = create_run(source="Manual", input="hi", session=session)
+
+		run.apply_result(
+			RunResult(
+				output="hello",
+				messages=[
+					{"role": "system", "content": "be terse\n\nEPHEMERAL CONTEXT"},
+					{"role": "user", "content": "hi"},
+					{"role": "assistant", "content": "hello"},
+				],
+				iterations=1,
+			)
+		)
+
+		rows = frappe.get_doc("Flow Session", session).messages
+		self.assertEqual([r.role for r in rows], ["system", "user", "assistant"])
+		# The augmented system message is never written back over the stored one.
+		self.assertEqual(rows[0].content, "be terse")
+
+	def test_caller_transcript_with_own_system_message_is_persisted_whole(self):
+		"""Nothing stored means nothing was built for this session, so a system message at the
+		head of the transcript is the caller's own — it belongs in the transcript."""
+		session = self._session_with_rows([])
+		run = create_run(source="Manual", input="hi", session=session)
+
+		run.apply_result(
+			RunResult(
+				output="hello",
+				messages=[
+					{"role": "system", "content": "be terse"},
+					{"role": "user", "content": "hi"},
+					{"role": "assistant", "content": "hello"},
+				],
+				iterations=1,
+			)
+		)
+
+		rows = frappe.get_doc("Flow Session", session).messages
+		self.assertEqual([r.role for r in rows], ["system", "user", "assistant"])

@@ -1,0 +1,19 @@
+{
+  "_comment": "Acceptance contract for brain/10-specs/s17-one-approval-one-action.md. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Written 2026-09-21 (unattended run 9), from the spec's own numbered acceptance criteria.",
+  "spec": "s17-one-approval-one-action",
+  "features": [
+    { "id": 1, "description": "Two tool calls in one response sharing an id raise before any tool is invoked.", "passes": true },
+    { "id": 2, "description": "Two tool calls in one response that carry no usable id - None or empty string - are refused the same way, and neither runs.", "passes": true },
+    { "id": 3, "description": "A single call carrying no id is unchanged (control for 2).", "passes": false },
+    { "id": 4, "description": "Ids differing only by case or whitespace are two answerable calls and both execute (control).", "passes": true },
+    { "id": 5, "description": "The colliding assistant message never enters the transcript.", "passes": true },
+    { "id": 6, "description": "The refusal is identical in the streamed loop.", "passes": true },
+    { "id": 7, "description": "A response whose ids are all distinct executes exactly as today (control).", "passes": true },
+    { "id": 8, "description": "A single call, gated or ungated, is unchanged (control).", "passes": true },
+    { "id": 9, "description": "A stored transcript carrying an indistinguishable assistant turn is refused at resume, and the tool does not run.", "passes": true },
+    { "id": 10, "description": "A stored transcript with distinct ids resumes exactly as today (control).", "passes": true },
+    { "id": 11, "description": "The refusal, on both the forward and the resume path, names no platform, vendor or model.", "passes": true },
+    { "id": 12, "description": "The evals runner can express an expected refusal, fails a wrong one, still fails an unexpected raise, and applies absent_text to the refusal text.", "passes": true },
+    { "id": 13, "description": "resume_run's answer contract is unchanged: no web-app change is required.", "passes": true }
+  ]
+}

@@ -1,0 +1,84 @@
+name: missing_tool_at_resume
+description: The tool is gone by the time the approval arrives; nothing runs and no answer is echoed back. This covers the missing-tool half of S15 only; the stale-gate half is covered by the unit module.
+user_message: pay alice
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+  - name: read_balance
+    description: Read an account balance.
+    result: "120"
+    parameters:
+      type: object
+      properties:
+        account: {type: string}
+model_script:
+  - tool_calls:
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+  after:
+    approved_but_the_tool_is_gone:
+      # The resumed runtime no longer has send_money — removed, renamed or disabled while the
+      # run was paused. A resume rebuilds the agent from its records, so this is the ordinary
+      # production shape, not an exotic one.
+      tools:
+        - name: read_balance
+          description: Read an account balance.
+          result: "120"
+          parameters:
+            type: object
+            properties:
+              account: {type: string}
+      answers: {c1: Approve}
+      executed: []
+      tool_results:
+        c1:
+          contains: ["not_executed", "no longer available", "Do not report it as done"]
+          # The defect: before S15 this result was the literal string the person answered with,
+          # so the model read its own tool call as having returned "Approve".
+          absent: ["Approve", "sent"]
+      model_script:
+        - content: I could not do that.
+      output: I could not do that.
+    denied_and_the_tool_is_gone:
+      tools:
+        - name: read_balance
+          description: Read an account balance.
+          result: "120"
+          parameters:
+            type: object
+            properties:
+              account: {type: string}
+      answers: {c1: Deny}
+      executed: []
+      tool_results:
+        c1:
+          contains: ["not_executed", "no longer available"]
+          absent: ["Deny"]
+      output: null
+      paused: false
+    approved_and_the_tool_is_still_there:
+      # The control. Without it this scenario would pass on an engine that refused everything.
+      answers: {c1: Approve}
+      executed: [send_money]
+      tool_results:
+        c1:
+          equals: sent
+      model_script:
+        - content: paid
+      output: paid
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

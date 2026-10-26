@@ -1,0 +1,13 @@
+{
+  "_comment": "The acceptance contract for the ACTIVE spec. The agent may ONLY flip 'passes'. Entries may never be added, removed, or reworded. Enforced by scripts/hooks/guard-protected.sh. Written from brain/10-specs/f3-turn-context.md on 2026-09-19.",
+  "spec": "f3-turn-context",
+  "features": [
+    { "id": 1, "description": "On a session turn with time frozen to a known instant, the system message sent to the model contains that ISO date and its weekday name.", "passes": true },
+    { "id": 2, "description": "Two prompt builds in the same session, time frozen to day 1 then day 2, show day 1 then day 2.", "passes": true },
+    { "id": 3, "description": "After a turn, no stored session message contains the frozen date: the context block is never persisted.", "passes": true },
+    { "id": 4, "description": "A session whose agent has no instructions and no memory still sends a system message carrying the context.", "passes": true },
+    { "id": 5, "description": "The time zone is the user's own when set, otherwise the system time zone; its name appears in the block and the local time shown is correct for it.", "passes": true },
+    { "id": 6, "description": "The block contains the invoking user's full name and none of 'frappe', 'flow', 'erpnext' (case-insensitive).", "passes": true },
+    { "id": 7, "description": "Upstream's existing test suite stays green unmodified, including TestAgentConfirmation.", "passes": true }
+  ]
+}

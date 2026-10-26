@@ -1,0 +1,43 @@
+name: ungated_call_beside_a_gated_one
+description: "An ungated tool in the same reply as a gated one does not run before the person is asked. Named for the defect it was written to reproduce; it now asserts the fix."
+user_message: read alice's balance and pay her
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: read_balance
+    description: Read an account balance.
+    result: "120"
+    parameters:
+      type: object
+      properties:
+        account: {type: string}
+      required: [account]
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+model_script:
+  - tool_calls:
+      - {id: r1, name: read_balance, arguments: {account: alice}}
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+expect:
+  pauses: true
+  # THE CLAIM: nothing at all should run before the person has answered. Today read_balance has
+  # already run by the time the question is shown, so this list is what fails.
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+  after:
+    denied:
+      answers: {c1: Deny}
+      executed: []
+      output: null
+      paused: false
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]

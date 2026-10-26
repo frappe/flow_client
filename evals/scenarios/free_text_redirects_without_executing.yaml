@@ -1,0 +1,33 @@
+name: free_text_redirects_without_executing
+description: Free text is a redirect — nothing executes and the model is asked to adjust.
+user_message: pay alice 500
+agent:
+  instructions: Be terse. Use the tools you are given.
+tools:
+  - name: send_money
+    description: Send money to someone.
+    requires_confirmation: true
+    result: sent
+    parameters:
+      type: object
+      properties:
+        to: {type: string}
+        amount: {type: integer}
+      required: [to, amount]
+model_script:
+  - tool_calls:
+      - {id: c1, name: send_money, arguments: {to: alice, amount: 500}}
+expect:
+  pauses: true
+  tool_calls: []
+  questions:
+    count: 1
+    options: [Approve, Deny]
+  after:
+    free_text:
+      answers: {c1: make it 200 instead}
+      executed: []
+      output: shall I send 200 instead?
+      model_script:
+        - content: shall I send 200 instead?
+  absent_text: [frappe, erpnext, mariadb, openai, anthropic, gpt-, claude]
